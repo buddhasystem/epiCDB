@@ -1,2 +1,552 @@
-# epiCDB
-Component DB for ePIC
+# Component Database (CDB) — Django Implementation
+
+A Django implementation of the Component Database described in *The Component
+Database User Guide* (Argonne National Laboratory / ePIC). The CDB is the
+central repository for documenting, organizing, and tracking components used
+in a particle physics accelerator or detector project.
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Project Structure](#project-structure)
+3. [Quick Start](#quick-start)
+4. [Data Model](#data-model)
+   - [Institutions and Locations](#institutions-and-locations)
+   - [Domain 1 — Component Catalog](#domain-1--component-catalog)
+   - [Domain 2 — Component Inventory](#domain-2--component-inventory)
+   - [Domain 3 — Designs](#domain-3--designs)
+   - [Cross-Domain: Properties and Logs](#cross-domain-properties-and-logs)
+   - [Ownership](#ownership)
+5. [Django Admin](#django-admin)
+6. [Python Client (`cdb_client.py`)](#python-client-cdb_clientpy)
+   - [LocationClient](#locationclient)
+   - [CatalogClient](#catalogclient)
+   - [InventoryClient](#inventoryclient)
+   - [DesignClient](#designclient)
+   - [CDBClient (combined)](#cdbclient-combined)
+7. [Seed Data](#seed-data)
+8. [Schema Diagram](#schema-diagram)
+9. [Design Decisions](#design-decisions)
+
+---
+
+## Overview
+
+The CDB captures three interrelated domains:
+
+| Domain | Purpose |
+|--------|---------|
+| **Component Catalog** | Reference library of every component *type* — custom-fabricated or commercial — with metadata, drawings, vendors, and properties. |
+| **Component Inventory** | Physical instances of catalog items, each with a unique QR ID, tracked to a specific room, cabinet, or shelf at a specific institution. |
+| **Design Library** | Bill-of-Materials groupings: named assemblies of components and sub-assemblies, with hierarchical nesting and installed-instance tracking. |
+
+A flexible **Properties** system attaches arbitrary typed metadata to any
+domain item. A unified **Log** system records maintenance, inspection, and
+lifecycle events across all domains.
+
+---
+
+## Project Structure
+
+```
+cdb_project/
+├── manage.py
+├── cdb_client.py               # Programmatic query client (see below)
+├── cdb_project/
+│   ├── settings.py
+│   └── urls.py
+└── cdb/
+    ├── models.py               # All data models
+    ├── admin.py                # Django admin configuration
+    ├── migrations/             # Database migrations
+    │   ├── 0001_initial.py
+    │   ├── 0002_…              # Location country/city fields
+    │   └── 0003_…              # Institution model + Location FK
+    └── management/
+        └── commands/
+            └── seed_cdb.py     # Sample data loader
+```
+
+---
+
+## Quick Start
+
+**Requirements:** Python 3.10+, Django 4.x or 5.x.
+
+```bash
+pip install django
+
+cd cdb_project
+
+# Apply all migrations (creates db.sqlite3):
+python manage.py migrate
+
+# Load sample ePIC detector data:
+python manage.py seed_cdb
+
+# Start the development server:
+python manage.py runserver
+
+# Open the admin interface:
+#   http://127.0.0.1:8000/admin/
+#   Username: admin   Password: admin
+```
+
+To use the Python client from the Django shell:
+
+```bash
+python manage.py shell
+```
+
+```python
+from cdb_client import CDBClient
+client = CDBClient()
+
+# Find where a component is located
+client.where_is("000-001-003")
+
+# Get a full Bill of Materials
+client.designs.bom("ePIC Tracking System")
+```
+
+---
+
+## Data Model
+
+### Institutions and Locations
+
+**`Institution`** is the top-level geographic anchor, representing a
+collaborating lab or facility (e.g. BNL, CERN, Fermilab). Every location
+must belong to an institution, enabling inventory tracking across multiple
+sites.
+
+| Field | Description |
+|-------|-------------|
+| `name` | Full name (unique) |
+| `abbreviation` | Short code, e.g. `BNL` |
+| `country` / `city` | Site geography |
+| `url` | Homepage |
+
+**`Location`** represents a physical place within an institution, organized
+in a self-referential hierarchy: Building → Room → Cabinet → Shelf.
+
+| Field | Description |
+|-------|-------------|
+| `name` | Location name |
+| `location_type` | `building`, `room`, `cabinet`, `shelf`, `other` |
+| `institution` | FK to owning Institution |
+| `parent` | FK to parent Location (self-referential) |
+
+`Location.__str__()` returns the full slash-separated path, e.g.:
+`BNL / Building 510 / Room 382`.
+
+---
+
+### Domain 1 — Component Catalog
+
+**`Component`** — one entry per unique component *type*.
+
+| Field | Description |
+|-------|-------------|
+| `name` | Unique within a project |
+| `model_number` | Vendor or internal model number |
+| `description` | Free-text description |
+| `project` | e.g. `ePIC` |
+| `technical_system` | FK → `TechnicalSystem` (e.g. Tracking, Calorimetry) |
+| `function` | FK → `ComponentFunction` (e.g. Silicon Strip Sensor) |
+| `sources` | M2M → `Source` via `ComponentSource` |
+| *(OwnedModel)* | Ownership + timestamps |
+
+**`TechnicalSystem`** — engineering subsystem (Tracking, Vacuum, Controls, …).
+Acts as a chapter in the catalog.
+
+**`ComponentFunction`** — generic component type within a system (ADC, Gate
+Valve, SiPM, …). Acts as a section within a chapter.
+
+**`Source`** — vendor or manufacturer. The `ComponentSource` through-table
+adds `part_number`, `cost`, and `role` (`vendor` / `manufacturer` / `both`).
+
+---
+
+### Domain 2 — Component Inventory
+
+**`ComponentInstance`** — one row per physical item.
+
+| Field | Description |
+|-------|-------------|
+| `qr_id` | Unique QR/barcode identifier printed on the hardware |
+| `tag` | Human-readable label |
+| `serial_number` | Vendor serial number |
+| `component` | FK → `Component` (catalog type) |
+| `location` | FK → `Location` (where it currently is) |
+| *(OwnedModel)* | Ownership + timestamps |
+
+Each instance inherits all catalog-level properties from its parent
+Component, and may additionally carry its own instance-specific properties
+(e.g. an inspection report, a QA grade, a date put in service).
+
+---
+
+### Domain 3 — Designs
+
+**`Design`** — a named assembly that fulfils a functional requirement.
+Examples: *ePIC SVT Layer 1 Module*, *ePIC DAQ MicroTCA Crate*.
+
+| Field | Description |
+|-------|-------------|
+| `name` | Unique design name |
+| `description` | Functional description |
+| `project` | e.g. `ePIC` |
+| *(OwnedModel)* | Ownership + timestamps |
+
+**`DesignElement`** — one slot within a design.
+
+| Field | Description |
+|-------|-------------|
+| `element_name` | Unique name within the design (from naming convention) |
+| `component` | FK → `Component` (leaf element) |
+| `child_design` | FK → `Design` (sub-assembly — enables unlimited nesting) |
+| `installed_instance` | FK → `ComponentInstance` (which physical item occupies this slot) |
+| `quantity` | Number of this element required |
+
+Exactly one of `component` or `child_design` is set per element. The
+`installed_instance` field tracks which specific inventory item is currently
+installed at each slot.
+
+---
+
+### Cross-Domain: Properties and Logs
+
+**`PropertyValue`** — flexible key/value metadata attachable to any domain
+item. A single table serves all four targets via optional FK columns.
+
+| Field | Description |
+|-------|-------------|
+| `property_type` | FK → `PropertyType` (predefined, admin-extensible) |
+| `tag` | Optional label for this value |
+| `value` | String value |
+| `units` | Optional unit string |
+| `is_dynamic` | True if value varies per instance (e.g. an inspection result) |
+| `component` / `component_instance` / `design` / `design_element` | Target FK — exactly one is set |
+
+**`PropertyType`** defines the schema for a property. The `handler` field
+specifies typed behaviour:
+
+| Handler | Behaviour |
+|---------|-----------|
+| `pdmlink` | Integrates with PDMLink engineering drawing system |
+| `traveler_template` | Links to an eTraveler inspection template |
+| `traveler_instance` | Links to a filled-out eTraveler form |
+| `document` | Attach any file |
+| `image` | Attach a viewable image (shown in gallery) |
+| `http_link` | Store a URL |
+| `currency` | Numeric value with `#.##` formatting |
+| `boolean` | True/false checkbox |
+| `date` | Date picker |
+
+**`LogEntry`** — lifecycle event log, attachable to Component,
+ComponentInstance, or Design.
+
+| Field | Description |
+|-------|-------------|
+| `topic` | `installation`, `maintenance`, `inspection`, `repair`, `decommission`, `other` |
+| `entry` | Free-text log message |
+| `attachment` | Optional file upload |
+| `logged_by` | FK → Django User |
+| `timestamp` | Auto-set on creation |
+
+---
+
+### Ownership
+
+Every domain model (Component, ComponentInstance, Design) inherits from the
+abstract `OwnedModel`, which supplies:
+
+| Field | Description |
+|-------|-------------|
+| `owner_user` | Individual owner (Django User) |
+| `owner_group` | Owning group (CDB `Group`) |
+| `group_writeable` | Whether group members can edit |
+| `created_by` / `created_on` | Creation audit trail |
+| `modified_by` / `modified_on` | Modification audit trail |
+
+**`Group`** — a named team or department (e.g. `DIAG`, `CTL`, `EPIC_TRK`).
+
+---
+
+## Django Admin
+
+The admin interface at `/admin/` provides full CRUD access to all models,
+mirroring the CDB portal's layout:
+
+- **Institution** pages include an inline table of all their locations.
+- **Component** pages include inline tables for sources, properties,
+  inventory instances, and log entries.
+- **ComponentInstance** pages include inline properties and logs, plus an
+  Institution column in the list view for quick site identification.
+- **Design** pages include inline design elements, properties, and logs.
+- **DesignElement** pages include inline element-level properties.
+- All list views support filtering and search.
+
+---
+
+## Python Client (`cdb_client.py`)
+
+A standalone query client that wraps Django ORM calls behind a clean API.
+All methods return lazy Django QuerySets (chainable) unless documented as
+returning a plain dict or list.
+
+### Setup outside the Django shell
+
+```python
+import sys, os
+sys.path.insert(0, "/path/to/cdb_project")
+os.environ["DJANGO_SETTINGS_MODULE"] = "cdb_project.settings"
+import django; django.setup()
+
+from cdb_client import CDBClient
+client = CDBClient()
+```
+
+---
+
+### LocationClient
+
+```python
+lc = client.locations
+
+# All institutions
+lc.all_institutions()
+
+# Single institution by abbreviation
+lc.get_institution(abbreviation="BNL")
+
+# Institutions in a country
+lc.institutions_by_country("USA")
+
+# All locations at an institution
+lc.locations_at_institution("CERN")
+
+# Buildings only, optionally filtered by institution
+lc.buildings(institution_abbr="BNL")
+
+# Rooms within a named building
+lc.rooms_in_building("Building 510", institution_abbr="BNL")
+
+# Full nested tree as a list of dicts
+lc.location_tree("BNL")
+# Returns: [{"id": 1, "name": "Building 510", "type": "building",
+#            "children": [{"id": 2, "name": "Room 382", ...}]}]
+```
+
+---
+
+### CatalogClient
+
+```python
+cc = client.catalog
+
+# Full-text search (name, model number, description)
+cc.search("silicon strip")
+
+# Filter by technical system or function
+cc.by_technical_system("Tracking")
+cc.by_function("SiPM")
+
+# Look up a single component
+cc.get(name="ePIC SVT Silicon Strip Sensor")
+cc.get(model_number="HPK-SVT-01")
+
+# Related data
+cc.sources_for("ePIC SVT Silicon Strip Sensor")    # → QuerySet[ComponentSource]
+cc.properties_for("ePIC SVT Silicon Strip Sensor") # → QuerySet[PropertyValue]
+cc.logs_for("ePIC SVT Silicon Strip Sensor")       # → QuerySet[LogEntry]
+cc.instance_count("ePIC SVT Silicon Strip Sensor") # → int
+
+# Full plain-dict summary
+cc.summary("ePIC SVT Silicon Strip Sensor")
+# Returns: {"id": ..., "name": ..., "sources": [...], "properties": [...], ...}
+```
+
+---
+
+### InventoryClient
+
+```python
+ic = client.inventory
+
+# Look up by QR code
+ic.get_by_qr("000-001-003")
+
+# All instances of a component type
+ic.instances_of("ePIC SVT Silicon Strip Sensor")
+
+# Filter by institution or location
+ic.at_institution("CERN")
+ic.at_location("Room 382", institution_abbr="BNL")
+
+# Filter by owner group
+ic.by_group("EPIC_TRK")
+
+# Full-text search
+ic.search("SVT-Sensor")
+
+# Which instances are installed in a design's slots?
+ic.installed_in_design("ePIC SVT Layer 1 Module")
+
+# Instance count grouped by institution (plain list of dicts)
+ic.institution_summary()
+# Returns: [{"institution": "BNL", "count": 7}, {"institution": "FNAL", "count": 1}]
+
+# Full plain-dict detail for a single instance
+ic.detail("000-001-001")
+# Returns: {"qr_id": ..., "location": ..., "institution": ..., "properties": [...], "logs": [...]}
+```
+
+---
+
+### DesignClient
+
+```python
+dc = client.designs
+
+# All designs, or filtered by project
+dc.all_designs()
+dc.by_project("ePIC")
+
+# Full-text search
+dc.search("tracking")
+
+# Elements of a design
+dc.elements_of("ePIC SVT Layer 1 Module")  # → QuerySet[DesignElement]
+
+# Recursive Bill of Materials (nested list of dicts)
+dc.bom("ePIC Tracking System")
+# Returns:
+# [{"element": "TRK-SVT-L1-MOD-01", "type": "DESIGN",
+#   "ref": "ePIC SVT Layer 1 Module", "qty": 1,
+#   "children": [
+#     {"element": "SVT-L1-SEN-A", "type": "COMPONENT",
+#      "ref": "ePIC SVT Silicon Strip Sensor",
+#      "model_number": "HPK-SVT-01",
+#      "installed_qr": "000-001-001", "children": []},
+#     ...
+#   ]}, ...]
+
+# Flat list of leaf components only (no sub-design rows)
+dc.flat_component_list("ePIC SVT Layer 1 Module")
+
+# Which designs directly contain a given component?
+dc.designs_using_component("ePIC SVT Silicon Strip Sensor")
+
+# Full plain-dict summary including BOM
+dc.summary("ePIC DAQ MicroTCA Crate")
+```
+
+---
+
+### CDBClient (combined)
+
+```python
+client = CDBClient()
+
+# Search components, instances, and designs in one call
+client.search_all("strip")
+# Returns: {"components": [...], "instances": [...], "designs": [...]}
+
+# Where is a QR-coded item right now?
+client.where_is("000-001-003")
+# Returns: {"qr_id": "000-001-003", "component": "ePIC SVT Silicon Strip Sensor",
+#           "location": "BNL / Building 510 / Room 382",
+#           "institution": "BNL", "city": "Upton", "country": "USA"}
+
+# Sub-clients
+client.locations   # LocationClient
+client.catalog     # CatalogClient
+client.inventory   # InventoryClient
+client.designs     # DesignClient
+```
+
+---
+
+## Seed Data
+
+`python manage.py seed_cdb` loads a realistic ePIC detector dataset:
+
+| Object | Count | Examples |
+|--------|-------|---------|
+| Institutions | 4 | BNL, CERN, FNAL, ANL |
+| Locations | 8 | Building 510/Room 382 (BNL), Clean Room (CERN), MP9/Assembly Bay (FNAL) |
+| Groups | 6 | EPIC_TRK, EPIC_CAL, CTL, DIAG, MED, APSU_VAC |
+| Components | 8 | SVT Strip Sensor, MAPS Pixel Sensor, PbWO₄ Crystal, SiPM, HV Module, … |
+| Instances | 8 | Spread across BNL, CERN, and FNAL |
+| Designs | 4 | SVT Layer 1 Module, EMCal Cell, DAQ Crate, full Tracking System |
+| Property Types | 13 | Strip Pitch, QA Level, QA Inspection Report, PDMLink Drawing, … |
+| Sources | 5 | Hamamatsu, CAEN, Concurrent Technologies, Fermilab In-house, … |
+
+The seed command is idempotent — running it multiple times will not create
+duplicate records.
+
+Default superuser: **admin / admin**.
+
+---
+
+## Schema Diagram
+
+```
+Institution
+    │
+    └─► Location (building → room → cabinet → shelf, self-FK)
+              │
+              └─► ComponentInstance ──────────────────┐
+                       │                              │
+                       │  FK: component               │  FK: installed_instance
+                       ▼                              ▼
+Group ──────► Component                         DesignElement ◄──── Design
+                  │                                  │
+                  ├─► ComponentSource ──► Source     └─► child_design (FK: Design)
+                  │
+                  ├─► PropertyValue   (FK: component)
+                  ├─► PropertyValue   (FK: component_instance)
+                  ├─► PropertyValue   (FK: design)
+                  └─► PropertyValue   (FK: design_element)
+
+LogEntry  (optional FK to Component / ComponentInstance / Design)
+
+TechnicalSystem ──► ComponentFunction ──► Component
+PropertyType ──► PropertyValue
+```
+
+---
+
+## Design Decisions
+
+**`OwnedModel` abstract base** — every domain model inherits a consistent
+set of ownership (`owner_user`, `owner_group`, `group_writeable`) and audit
+fields (`created_by/on`, `modified_by/on`), matching the CDB User Guide's
+ownership model.
+
+**`Institution` as a first-class model** — rather than a free-text field or
+a special location type, `Institution` is its own model with country, city,
+and URL. Every `Location` has a mandatory FK to an `Institution`, enabling
+`SELECT … WHERE location__institution__abbreviation = 'CERN'` style queries
+across the whole inventory.
+
+**Single `PropertyValue` table** — four nullable FK columns (`component`,
+`component_instance`, `design`, `design_element`) let one table serve all
+domains with no duplication of schema, matching the CDB's philosophy that
+any object can carry any property.
+
+**`DesignElement` dual-target pattern** — each element sets either
+`component` (leaf) or `child_design` (sub-assembly), never both. This
+enables unlimited BOM nesting depth and is the mechanism by which a "full
+tracking system" design can reference "SVT Layer 1 Module" sub-designs,
+which in turn reference individual sensor and ASIC components.
+
+**QuerySet-returning client methods** — `CatalogClient`, `InventoryClient`,
+and `DesignClient` return lazy Django QuerySets wherever possible. Callers
+can chain additional filters, annotations, or `values()` calls without
+re-querying the database. Methods that return dicts or lists are explicitly
+documented as such.

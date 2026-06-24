@@ -1,0 +1,331 @@
+"""
+Component Database (CDB) models.
+Three primary domains: Component Catalog, Component Inventory, Design.
+Supporting: Institution, Location, Group, Ownership, Properties, Logs.
+"""
+
+from django.db import models
+from django.contrib.auth.models import User
+from django.utils import timezone
+
+
+# ---------------------------------------------------------------------------
+# Supporting tables
+# ---------------------------------------------------------------------------
+
+class Group(models.Model):
+    """Owner group (e.g. DIAG, CTL, MED, APSU_VAC)."""
+    name = models.CharField(max_length=64, unique=True)
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ["name"]
+
+
+class Institution(models.Model):
+    """
+    Top-level site anchor (BNL, CERN, Fermilab, …).
+    Locations belong to an institution, enabling multi-site inventory tracking.
+    """
+    name        = models.CharField(max_length=128, unique=True)
+    abbreviation= models.CharField(max_length=16,  blank=True)
+    country     = models.CharField(max_length=64,  blank=True)
+    city        = models.CharField(max_length=64,  blank=True)
+    url         = models.URLField(blank=True)
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.abbreviation if self.abbreviation else self.name
+
+    class Meta:
+        ordering = ["name"]
+
+
+class Location(models.Model):
+    """
+    Physical location hierarchy within an institution:
+    building → room → cabinet → shelf.
+    Every location is anchored to exactly one Institution.
+    """
+    LOCATION_TYPES = [
+        ("building", "Building"),
+        ("room",     "Room"),
+        ("cabinet",  "Cabinet"),
+        ("shelf",    "Shelf"),
+        ("other",    "Other"),
+    ]
+    name          = models.CharField(max_length=128)
+    location_type = models.CharField(max_length=16, choices=LOCATION_TYPES, default="room")
+    institution   = models.ForeignKey(
+        Institution, null=True, blank=True, on_delete=models.SET_NULL, related_name="locations"
+    )
+    parent = models.ForeignKey(
+        "self", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="children"
+    )
+    description = models.TextField(blank=True)
+
+    def full_path(self):
+        """Return slash-separated path: Institution / Building / Room / …"""
+        parts = []
+        node = self
+        while node is not None:
+            parts.append(node.name)
+            node = node.parent
+        parts.append(str(self.institution))
+        return " / ".join(reversed(parts))
+
+    def __str__(self):
+        return self.full_path()
+
+    class Meta:
+        ordering = ["name"]
+
+
+class PropertyType(models.Model):
+    """Predefined property types (extensible by admins)."""
+    HANDLER_CHOICES = [
+        ("",                  "None"),
+        ("pdmlink",           "PDMLink"),
+        ("component_design",  "Component Design"),
+        ("traveler_template", "Traveler Template"),
+        ("traveler_instance", "Traveler Instance"),
+        ("document",          "Document"),
+        ("image",             "Image"),
+        ("http_link",         "HTTP Link"),
+        ("currency",          "Currency"),
+        ("boolean",           "Boolean"),
+        ("date",              "Date"),
+    ]
+    CATEGORY_CHOICES = [
+        ("physical",       "Physical"),
+        ("documentation",  "Documentation"),
+        ("qa",             "QA"),
+        ("lattice",        "Lattice"),
+        ("safety",         "Safety"),
+        ("maintenance",    "Maintenance"),
+        ("design",         "Design"),
+        ("status",         "Status"),
+        ("other",          "Other"),
+    ]
+    name          = models.CharField(max_length=128, unique=True)
+    category      = models.CharField(max_length=32, choices=CATEGORY_CHOICES, default="other")
+    handler       = models.CharField(max_length=32, choices=HANDLER_CHOICES, blank=True, default="")
+    description   = models.TextField(blank=True)
+    default_units = models.CharField(max_length=64, blank=True)
+    default_value = models.CharField(max_length=256, blank=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ["name"]
+
+
+# ---------------------------------------------------------------------------
+# Abstract base: ownership + timestamps
+# ---------------------------------------------------------------------------
+
+class OwnedModel(models.Model):
+    owner_user  = models.ForeignKey(User,  null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    owner_group = models.ForeignKey(Group, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    group_writeable = models.BooleanField(default=False)
+    created_by  = models.ForeignKey(User,  null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_on  = models.DateTimeField(default=timezone.now, editable=False)
+    modified_by = models.ForeignKey(User,  null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    modified_on = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
+# ---------------------------------------------------------------------------
+# Cross-domain: PropertyValue and LogEntry
+# ---------------------------------------------------------------------------
+
+class PropertyValue(models.Model):
+    property_type = models.ForeignKey(PropertyType, on_delete=models.CASCADE)
+    tag           = models.CharField(max_length=128, blank=True)
+    value         = models.TextField(blank=True)
+    units         = models.CharField(max_length=64,  blank=True)
+    description   = models.TextField(blank=True)
+    is_dynamic    = models.BooleanField(default=False)
+    user_writable = models.BooleanField(default=True)
+
+    # One of these FKs is set; the rest are NULL
+    component          = models.ForeignKey("Component",         null=True, blank=True, on_delete=models.CASCADE, related_name="properties")
+    component_instance = models.ForeignKey("ComponentInstance", null=True, blank=True, on_delete=models.CASCADE, related_name="properties")
+    design             = models.ForeignKey("Design",            null=True, blank=True, on_delete=models.CASCADE, related_name="properties")
+    design_element     = models.ForeignKey("DesignElement",     null=True, blank=True, on_delete=models.CASCADE, related_name="properties")
+
+    created_on  = models.DateTimeField(default=timezone.now, editable=False)
+    modified_on = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.property_type.name}: {self.value[:40]}"
+
+    class Meta:
+        ordering = ["property_type__name"]
+
+
+class LogEntry(models.Model):
+    TOPIC_CHOICES = [
+        ("",             "General"),
+        ("installation", "Installation"),
+        ("maintenance",  "Maintenance"),
+        ("inspection",   "Inspection"),
+        ("repair",       "Repair"),
+        ("decommission", "Decommission"),
+        ("other",        "Other"),
+    ]
+    topic      = models.CharField(max_length=32, choices=TOPIC_CHOICES, blank=True, default="")
+    entry      = models.TextField()
+    attachment = models.FileField(upload_to="log_attachments/", null=True, blank=True)
+    logged_by  = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="cdb_log_entries")
+    timestamp  = models.DateTimeField(default=timezone.now)
+
+    component          = models.ForeignKey("Component",         null=True, blank=True, on_delete=models.CASCADE, related_name="log_entries")
+    component_instance = models.ForeignKey("ComponentInstance", null=True, blank=True, on_delete=models.CASCADE, related_name="log_entries")
+    design             = models.ForeignKey("Design",            null=True, blank=True, on_delete=models.CASCADE, related_name="log_entries")
+
+    def __str__(self):
+        return f"[{self.timestamp:%Y-%m-%d}] {self.entry[:60]}"
+
+    class Meta:
+        ordering = ["-timestamp"]
+
+
+# ---------------------------------------------------------------------------
+# Domain 1 — Component Catalog
+# ---------------------------------------------------------------------------
+
+class TechnicalSystem(models.Model):
+    name        = models.CharField(max_length=64, unique=True)
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ["name"]
+
+
+class ComponentFunction(models.Model):
+    name             = models.CharField(max_length=64, unique=True)
+    technical_system = models.ForeignKey(TechnicalSystem, null=True, blank=True, on_delete=models.SET_NULL, related_name="functions")
+    description      = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ["name"]
+
+
+class Source(models.Model):
+    name          = models.CharField(max_length=256, unique=True)
+    contact_email = models.EmailField(blank=True)
+    url           = models.URLField(blank=True)
+    address       = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ["name"]
+
+
+class Component(OwnedModel):
+    name             = models.CharField(max_length=256)
+    alternate_name   = models.CharField(max_length=256, blank=True)
+    model_number     = models.CharField(max_length=128, blank=True)
+    description      = models.TextField(blank=True)
+    project          = models.CharField(max_length=64,  blank=True, default="ePIC")
+    technical_system = models.ForeignKey(TechnicalSystem,   null=True, blank=True, on_delete=models.SET_NULL, related_name="components")
+    function         = models.ForeignKey(ComponentFunction, null=True, blank=True, on_delete=models.SET_NULL, related_name="components")
+    sources          = models.ManyToManyField(Source, through="ComponentSource", blank=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ["name"]
+        unique_together = [("name", "project")]
+
+
+class ComponentSource(models.Model):
+    ROLE_CHOICES = [
+        ("vendor",       "Vendor"),
+        ("manufacturer", "Manufacturer"),
+        ("both",         "Vendor & Manufacturer"),
+    ]
+    component   = models.ForeignKey(Component, on_delete=models.CASCADE)
+    source      = models.ForeignKey(Source,    on_delete=models.CASCADE)
+    part_number = models.CharField(max_length=128, blank=True)
+    cost        = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    role        = models.CharField(max_length=16, choices=ROLE_CHOICES, default="vendor")
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"{self.source.name} → {self.component.name}"
+
+    class Meta:
+        unique_together = [("component", "source")]
+
+
+# ---------------------------------------------------------------------------
+# Domain 2 — Component Inventory
+# ---------------------------------------------------------------------------
+
+class ComponentInstance(OwnedModel):
+    qr_id         = models.CharField(max_length=32, unique=True)
+    tag           = models.CharField(max_length=128, blank=True)
+    serial_number = models.CharField(max_length=128, blank=True)
+    component     = models.ForeignKey(Component, on_delete=models.PROTECT, related_name="instances")
+    location      = models.ForeignKey(Location,  null=True, blank=True, on_delete=models.SET_NULL, related_name="instances")
+    description   = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"{self.qr_id} ({self.component.name})"
+
+    class Meta:
+        ordering = ["qr_id"]
+
+
+# ---------------------------------------------------------------------------
+# Domain 3 — Designs
+# ---------------------------------------------------------------------------
+
+class Design(OwnedModel):
+    name        = models.CharField(max_length=256, unique=True)
+    description = models.TextField(blank=True)
+    project     = models.CharField(max_length=64, blank=True, default="ePIC")
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ["name"]
+
+
+class DesignElement(models.Model):
+    design             = models.ForeignKey(Design,             on_delete=models.CASCADE,  related_name="elements")
+    element_name       = models.CharField(max_length=128)
+    component          = models.ForeignKey(Component,         null=True, blank=True, on_delete=models.SET_NULL, related_name="design_memberships")
+    child_design       = models.ForeignKey(Design,            null=True, blank=True, on_delete=models.SET_NULL, related_name="parent_elements")
+    installed_instance = models.ForeignKey(ComponentInstance, null=True, blank=True, on_delete=models.SET_NULL, related_name="installed_at")
+    quantity           = models.PositiveIntegerField(default=1)
+    description        = models.TextField(blank=True)
+
+    def element_type(self):
+        return "DESIGN" if self.child_design_id else "COMPONENT"
+
+    def __str__(self):
+        return f"{self.design.name} / {self.element_name}"
+
+    class Meta:
+        ordering = ["element_name"]
+        unique_together = [("design", "element_name")]
