@@ -3,6 +3,13 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+
+# emacs backup
+*~
+
+# Local DB
+db.sqlite3
+
 # C extensions
 *.so
 
