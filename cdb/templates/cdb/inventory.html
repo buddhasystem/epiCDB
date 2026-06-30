@@ -36,6 +36,7 @@
         <th>Serial No.</th>
         <th>Location</th>
         <th>Group</th>
+        <th>Owner</th>
       </tr>
     </thead>
     <tbody>
@@ -47,9 +48,10 @@
         <td><span style="font-family:monospace;font-size:12px">{{ inst.serial_number|default:"—" }}</span></td>
         <td style="font-size:12.5px">{{ inst.location|default:"—" }}</td>
         <td>{% if inst.owner_group %}<span class="tag gray">{{ inst.owner_group }}</span>{% else %}—{% endif %}</td>
+        <td style="font-size:12.5px">{% if inst.owner_user %}{{ inst.owner_user.get_full_name|default:inst.owner_user.username }}{% else %}—{% endif %}</td>
       </tr>
       {% empty %}
-      <tr><td colspan="6"><div class="empty">No instances found{% if q %} for "{{ q }}"{% endif %}</div></td></tr>
+      <tr><td colspan="7"><div class="empty">No instances found{% if q %} for "{{ q }}"{% endif %}</div></td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -63,8 +65,7 @@
       <a href="?{{ query_str }}&page={{ page_obj.previous_page_number }}">← Prev</a>
     {% else %}<span class="disabled">← Prev</span>{% endif %}
     <span class="current">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
-    {% if page_obj.has_next %}
-      <a href="?{{ query_str }}&page={{ page_obj.next_page_number }}">Next →</a>
+    {% if page_obj.has_next %}      <a href="?{{ query_str }}&page={{ page_obj.next_page_number }}">Next →</a>
     {% else %}<span class="disabled">Next →</span>{% endif %}
   </div>
 </div>

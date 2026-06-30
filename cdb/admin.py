@@ -43,7 +43,7 @@ class ComponentSourceInline(admin.TabularInline):
 
 class ComponentInstanceInline(admin.TabularInline):
     model = ComponentInstance; extra = 0
-    fields = ("qr_id", "tag", "serial_number", "location", "owner_group")
+    fields = ("qr_id", "tag", "serial_number", "location", "owner_user", "owner_group")
     show_change_link = True
 
 class LocationInline(admin.TabularInline):
