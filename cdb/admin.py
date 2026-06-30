@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import (
-    Group, Institution, Location, PropertyType, PropertyValue, LogEntry,
+    Institution, Location, PropertyType, PropertyValue, LogEntry,
     TechnicalSystem, Source,
     Component, ComponentSource,
     ComponentInstance,
@@ -57,11 +57,6 @@ class DesignElementInline(admin.TabularInline):
     show_change_link = True
 
 # ── Supporting ────────────────────────────────────────────────────────────────
-
-@admin.register(Group)
-class GroupAdmin(admin.ModelAdmin):
-    list_display  = ("name", "description")
-    search_fields = ("name",)
 
 @admin.register(Institution)
 class InstitutionAdmin(admin.ModelAdmin):
@@ -174,3 +169,4 @@ class PropertyValueAdmin(admin.ModelAdmin):
     list_display = ("property_type", "tag", "value", "units", "component", "component_instance", "design")
     list_filter  = ("property_type__category", "is_dynamic")
     search_fields = ("tag", "value", "property_type__name")
+                                                                                                                                             

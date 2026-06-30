@@ -1,29 +1,18 @@
 """
 Component Database (CDB) models.
 Three primary domains: Component Catalog, Component Inventory, Design.
-Supporting: Institution, Location, Group, Ownership, Properties, Logs.
+Supporting: Institution, Location, Ownership, Properties, Logs.
+Groups use Django's built-in auth.Group.
 """
 
 from django.db import models
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group
 from django.utils import timezone
 
 
 # ---------------------------------------------------------------------------
 # Supporting tables
 # ---------------------------------------------------------------------------
-
-class Group(models.Model):
-    """Owner group (e.g. DIAG, CTL, MED, APSU_VAC)."""
-    name = models.CharField(max_length=64, unique=True)
-    description = models.TextField(blank=True)
-
-    def __str__(self):
-        return self.name
-
-    class Meta:
-        ordering = ["name"]
-
 
 class Institution(models.Model):
     """

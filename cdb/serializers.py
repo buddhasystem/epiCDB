@@ -3,8 +3,9 @@ DRF serializers for the Component Database (CDB).
 """
 
 from rest_framework import serializers
+from django.contrib.auth.models import Group
 from .models import (
-    Group, Institution, Location, PropertyType, PropertyValue, LogEntry,
+    Institution, Location, PropertyType, PropertyValue, LogEntry,
     TechnicalSystem, Source,
     Component, ComponentSource,
     ComponentInstance,
@@ -17,7 +18,7 @@ from .models import (
 class GroupSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Group
-        fields = ["id", "name", "description"]
+        fields = ["id", "name"]
 
 
 class InstitutionSerializer(serializers.ModelSerializer):
