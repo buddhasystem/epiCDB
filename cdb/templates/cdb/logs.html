@@ -1,0 +1,88 @@
+{% extends "cdb/base.html" %}
+{% block title %}Activity Log — ePIC CDB{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Activity Log</h1>
+    <div class="page-subtitle">Maintenance, inspection, and lifecycle events</div>
+  </div>
+</div>
+
+<form method="get" class="toolbar">
+  <div class="search-wrap">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" name="q" value="{{ q }}" placeholder="Search log entries…">
+  </div>
+  <select name="topic" class="filter-select">
+    <option value="">All Topics</option>
+    {% for value, label in topics %}
+      {% if value %}
+      <option value="{{ value }}" {% if topic == value %}selected{% endif %}>{{ label }}</option>
+      {% endif %}
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-primary">Search</button>
+  {% if q or topic %}<a href="{% url 'log-list' %}" class="btn btn-ghost">Clear</a>{% endif %}
+</form>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Topic</th>
+        <th>Entry</th>
+        <th>Logged By</th>
+        <th>Related</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in page_obj %}
+      <tr>
+        <td style="white-space:nowrap;font-size:12.5px">{{ log.timestamp|date:"N j, Y" }}<br><span style="color:var(--muted)">{{ log.timestamp|date:"P" }}</span></td>
+        <td>
+          {% if log.topic %}
+          <span class="tag {% if log.topic == 'installation' %}green{% elif log.topic == 'maintenance' %}yellow{% elif log.topic == 'repair' %}red{% else %}gray{% endif %}">
+            {{ log.topic }}
+          </span>
+          {% else %}
+          <span class="tag gray">general</span>
+          {% endif %}
+        </td>
+        <td>{{ log.entry|truncatechars:120 }}</td>
+        <td style="font-size:12.5px;color:var(--muted)">
+          {% if log.logged_by %}{{ log.logged_by.get_full_name|default:log.logged_by.username }}{% else %}—{% endif %}
+        </td>
+        <td style="font-size:12px">
+          {% if log.component %}
+            <a href="{% url 'component-detail' log.component.pk %}" style="color:var(--accent)">{{ log.component.name|truncatechars:30 }}</a>
+          {% elif log.component_instance %}
+            <a href="{% url 'inventory-detail' log.component_instance.pk %}" style="color:var(--accent)"><span class="qr-code">{{ log.component_instance.qr_id }}</span></a>
+          {% elif log.design %}
+            <a href="{% url 'design-detail' log.design.pk %}" style="color:var(--accent)">{{ log.design.name|truncatechars:30 }}</a>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5"><div class="empty">No log entries found{% if q %} for "{{ q }}"{% endif %}</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if page_obj.paginator.num_pages > 1 %}
+<div class="pagination">
+  <span>Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }}</span>
+  <div class="page-btns">
+    {% if page_obj.has_previous %}
+      <a href="?{{ query_str }}&page={{ page_obj.previous_page_number }}">← Prev</a>
+    {% else %}<span class="disabled">← Prev</span>{% endif %}
+    <span class="current">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+      <a href="?{{ query_str }}&page={{ page_obj.next_page_number }}">Next →</a>
+    {% else %}<span class="disabled">Next →</span>{% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

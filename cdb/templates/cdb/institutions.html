@@ -1,0 +1,43 @@
+{% extends "cdb/base.html" %}
+{% block title %}Institutions — ePIC CDB{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Institutions &amp; Locations</h1>
+    <div class="page-subtitle">Collaborating labs and physical location hierarchy</div>
+  </div>
+</div>
+
+{% for inst in institutions %}
+<div class="inst-card">
+  <div class="inst-header">
+    <div class="inst-abbr">{{ inst.abbreviation|default:inst.name|slice:":3" }}</div>
+    <div class="inst-meta">
+      <div class="inst-name">{{ inst.name }}</div>
+      <div class="inst-info">
+        {% if inst.city %}{{ inst.city }}{% if inst.country %}, {% endif %}{% endif %}{{ inst.country }}
+        {% if inst.url %}&nbsp;·&nbsp;<a href="{{ inst.url }}" target="_blank" style="color:var(--accent)">{{ inst.url }}</a>{% endif %}
+      </div>
+    </div>
+    {% with loc_count=inst.locations.count %}
+    <div style="color:var(--muted);font-size:12px">{{ loc_count }} location{{ loc_count|pluralize }}</div>
+    {% endwith %}
+  </div>
+
+  {% if inst.locations.all %}
+  <div class="inst-locations">
+    {% for loc in inst.locations.all %}
+    <div class="loc-row">
+      <span class="loc-type">{{ loc.location_type }}</span>
+      <span>{{ loc.name }}</span>
+      {% if loc.parent %}<span style="color:var(--muted);font-size:12px">↳ {{ loc.parent.name }}</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% empty %}
+<div class="empty">No institutions found</div>
+{% endfor %}
+{% endblock %}

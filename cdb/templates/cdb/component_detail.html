@@ -1,0 +1,142 @@
+{% extends "cdb/base.html" %}
+{% block title %}{{ component.name }} — ePIC CDB{% endblock %}
+
+{% block content %}
+<a href="{% url 'component-list' %}" class="detail-back">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+  Back to Components
+</a>
+
+<div class="page-header">
+  <div>
+    <h1>{{ component.name }}</h1>
+    <div class="page-subtitle">
+      {% if component.technical_system %}<span class="tag">{{ component.technical_system }}</span>{% endif %}
+      {% if component.function %}<span class="tag gray" style="margin-left:4px">{{ component.function }}</span>{% endif %}
+      <span class="tag purple" style="margin-left:4px">{{ component.project }}</span>
+    </div>
+  </div>
+</div>
+
+<div class="detail-layout">
+  <!-- Left column -->
+  <div>
+    <div class="card">
+      <h2>Details</h2>
+      {% if component.alternate_name %}
+      <div class="field-group">
+        <div class="field-label">Alternate Name</div>
+        <div class="field-value">{{ component.alternate_name }}</div>
+      </div>
+      {% endif %}
+      <div class="field-group">
+        <div class="field-label">Model Number</div>
+        <div class="field-value mono">{{ component.model_number|default:"—" }}</div>
+      </div>
+      {% if component.description %}
+      <div class="field-group">
+        <div class="field-label">Description</div>
+        <div class="field-value">{{ component.description }}</div>
+      </div>
+      {% endif %}
+      {% if component.owner_group %}
+      <div class="field-group">
+        <div class="field-label">Owner Group</div>
+        <div class="field-value"><span class="tag gray">{{ component.owner_group }}</span></div>
+      </div>
+      {% endif %}
+      <div class="field-group">
+        <div class="field-label">Created</div>
+        <div class="field-value">{{ component.created_on|date:"N j, Y" }}</div>
+      </div>
+    </div>
+
+    <!-- Sources -->
+    <div class="card">
+      <h2>Sources</h2>
+      {% if component.componentsource_set.all %}
+      <div class="prop-list">
+        {% for cs in component.componentsource_set.all %}
+        <div class="prop-row">
+          <span class="prop-name">{{ cs.source.name }}</span>
+          <span class="prop-value" style="display:flex;gap:8px;align-items:center">
+            {% if cs.part_number %}<span class="qr-code">{{ cs.part_number }}</span>{% endif %}
+            <span class="tag gray">{{ cs.get_role_display }}</span>
+            {% if cs.cost %}<span style="color:var(--muted)">${{ cs.cost }}</span>{% endif %}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty" style="padding:12px 0">No sources recorded</div>
+      {% endif %}
+    </div>
+
+    <!-- Inventory instances -->
+    <div class="card">
+      <h2>Inventory Instances ({{ component.instances.count }})</h2>
+      {% if component.instances.all %}
+      <div class="table-wrap" style="margin:0">
+        <table>
+          <thead>
+            <tr><th>QR ID</th><th>Tag</th><th>Location</th></tr>
+          </thead>
+          <tbody>
+            {% for inst in component.instances.all %}
+            <tr class="clickable" onclick="location.href='{% url 'inventory-detail' inst.pk %}'">
+              <td><span class="qr-code">{{ inst.qr_id }}</span></td>
+              <td>{{ inst.tag|default:"—" }}</td>
+              <td style="font-size:12.5px">{{ inst.location|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty" style="padding:12px 0">No instances in inventory</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Right column -->
+  <div>
+    <!-- Properties -->
+    <div class="card">
+      <h2>Properties</h2>
+      {% if component.properties.all %}
+      <div class="prop-list">
+        {% for pv in component.properties.all %}
+        <div class="prop-row">
+          <span class="prop-name">{{ pv.property_type }}</span>
+          <span class="prop-value">{{ pv.value }}{% if pv.units %} <span style="color:var(--muted);font-size:11px">{{ pv.units }}</span>{% endif %}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty" style="padding:12px 0">No properties</div>
+      {% endif %}
+    </div>
+
+    <!-- Log entries -->
+    <div class="card">
+      <h2>Log Entries</h2>
+      {% if component.log_entries.all %}
+      <div class="log-list">
+        {% for log in component.log_entries.all %}
+        <div class="log-item {{ log.topic }}">
+          <div class="log-meta">
+            {{ log.timestamp|date:"N j, Y, P" }}
+            {% if log.topic %}&nbsp;·&nbsp;<span class="tag {% if log.topic == 'installation' %}green{% elif log.topic == 'maintenance' %}yellow{% elif log.topic == 'repair' %}red{% else %}gray{% endif %}">{{ log.topic }}</span>{% endif %}
+            {% if log.logged_by %}&nbsp;·&nbsp;{{ log.logged_by.get_full_name|default:log.logged_by.username }}{% endif %}
+          </div>
+          <div>{{ log.entry }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty" style="padding:12px 0">No log entries</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

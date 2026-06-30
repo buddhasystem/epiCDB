@@ -1,0 +1,79 @@
+{% extends "cdb/base.html" %}
+{% block title %}Dashboard — ePIC CDB{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Dashboard</h1>
+    <div class="page-subtitle">ePIC Component Database overview</div>
+  </div>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="label">Components</div>
+    <div class="value">{{ component_count }}</div>
+    <div class="sub">Catalog entries</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Instances</div>
+    <div class="value">{{ instance_count }}</div>
+    <div class="sub">Physical items</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Designs</div>
+    <div class="value">{{ design_count }}</div>
+    <div class="sub">Assemblies</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Log Entries</div>
+    <div class="value">{{ log_count }}</div>
+    <div class="sub">Events recorded</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Institutions</div>
+    <div class="value">{{ institution_count }}</div>
+    <div class="sub">Collaborating sites</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+  <div class="card">
+    <h2>Recent Activity</h2>
+    {% if recent_logs %}
+      <div class="log-list">
+        {% for log in recent_logs %}
+        <div class="log-item {{ log.topic }}">
+          <div class="log-meta">
+            {{ log.timestamp|date:"N j, Y, P" }}
+            {% if log.topic %}&nbsp;·&nbsp;<span class="tag {% if log.topic == 'installation' %}green{% elif log.topic == 'maintenance' %}yellow{% elif log.topic == 'repair' %}red{% else %}gray{% endif %}">{{ log.topic }}</span>{% endif %}
+          </div>
+          <div>{{ log.entry|truncatechars:100 }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty">No log entries yet</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Institutions</h2>
+    {% for inst in institutions %}
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="width:36px;height:36px;background:var(--accent);color:white;border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0">
+        {{ inst.abbreviation|default:inst.name|slice:":3" }}
+      </div>
+      <div>
+        <div style="font-weight:600;font-size:13.5px">{{ inst.name }}</div>
+        <div style="font-size:11.5px;color:var(--muted)">
+          {% if inst.city %}{{ inst.city }}{% if inst.country %}, {% endif %}{% endif %}{{ inst.country }}
+        </div>
+      </div>
+    </div>
+    {% empty %}
+      <div class="empty">No institutions</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

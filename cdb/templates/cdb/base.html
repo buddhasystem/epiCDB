@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}ePIC CDB{% endblock %}</title>
+<style>
+  :root {
+    --nav-width: 220px;
+    --nav-bg: #1a1f2e;
+    --nav-hover: #2a3148;
+    --nav-active: #3b4fd8;
+    --accent: #4f6ef7;
+    --bg: #f0f2f8;
+    --surface: #ffffff;
+    --border: #dde1f0;
+    --text: #1e2230;
+    --muted: #6b7280;
+    --tag-bg: #e8ecff;
+    --tag-fg: #3b4fd8;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* ── NAV ── */
+  nav {
+    width: var(--nav-width);
+    background: var(--nav-bg);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    overflow-y: auto;
+    z-index: 100;
+  }
+
+  .nav-brand {
+    padding: 20px 18px 14px;
+    border-bottom: 1px solid #2d3348;
+  }
+  .nav-brand .logo-row {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 4px;
+  }
+  .nav-brand .title { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: .5px; }
+  .nav-brand .subtitle { font-size: 11px; color: #8b93b0; }
+
+  .nav-section-label {
+    padding: 14px 18px 5px;
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 1.2px; color: #5c6480;
+    text-transform: uppercase;
+  }
+
+  nav a {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 18px;
+    color: #9aa1c0; text-decoration: none; font-size: 13.5px;
+    border-left: 3px solid transparent;
+    transition: background .15s, color .15s;
+  }
+  nav a:hover { background: var(--nav-hover); color: #fff; }
+  nav a.active { background: var(--nav-hover); color: #fff; border-left-color: var(--accent); }
+  nav a svg { opacity: .7; flex-shrink: 0; }
+  nav a.active svg, nav a:hover svg { opacity: 1; }
+
+  /* ── MAIN ── */
+  main {
+    margin-left: var(--nav-width);
+    flex: 1; padding: 28px 32px;
+  }
+
+  /* ── PAGE HEADER ── */
+  .page-header {
+    display: flex; align-items: center;
+    justify-content: space-between;
+    margin-bottom: 22px;
+  }
+  .page-header h1 { font-size: 22px; font-weight: 700; margin-bottom: 2px; }
+  .page-subtitle { font-size: 13px; color: var(--muted); }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px 24px; margin-bottom: 20px;
+  }
+  .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+
+  /* ── STAT GRID ── */
+  .stats-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr));
+    gap: 16px; margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 20px;
+  }
+  .stat-card .label { font-size: 12px; color: var(--muted); font-weight: 500; margin-bottom: 8px; }
+  .stat-card .value { font-size: 28px; font-weight: 700; color: var(--accent); line-height: 1; }
+  .stat-card .sub   { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* ── TOOLBAR ── */
+  .toolbar {
+    display: flex; gap: 10px; margin-bottom: 16px; align-items: center;
+  }
+  .search-wrap { flex: 1; position: relative; }
+  .search-wrap svg {
+    position: absolute; left: 10px; top: 50%;
+    transform: translateY(-50%); color: var(--muted); pointer-events: none;
+  }
+  .search-wrap input {
+    width: 100%; padding: 9px 12px 9px 34px;
+    border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13.5px; background: var(--surface); color: var(--text);
+    outline: none;
+  }
+  .search-wrap input:focus { border-color: var(--accent); }
+
+  select.filter-select {
+    padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 8px; font-size: 13px;
+    background: var(--surface); color: var(--text);
+  }
+
+  .btn {
+    padding: 8px 16px; border: none; border-radius: 8px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    text-decoration: none;
+  }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-ghost   { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+
+  /* ── TABLE ── */
+  .table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; background: var(--surface); }
+  thead th {
+    padding: 10px 14px; text-align: left;
+    font-size: 11.5px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .5px;
+    background: #f8f9fd; border-bottom: 1px solid var(--border);
+  }
+  tbody td { padding: 11px 14px; border-bottom: 1px solid #f0f2f8; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background .1s; }
+  tbody tr.clickable:hover { background: #f5f7ff; cursor: pointer; }
+  tbody td a { color: inherit; text-decoration: none; display: block; }
+  tbody td a:hover { color: var(--accent); }
+
+  /* ── TAGS ── */
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 20px;
+    font-size: 11px; font-weight: 500;
+    background: var(--tag-bg); color: var(--tag-fg);
+  }
+  .tag.green  { background: #dcfce7; color: #166534; }
+  .tag.yellow { background: #fef3c7; color: #92400e; }
+  .tag.gray   { background: #f1f5f9; color: #475569; }
+  .tag.purple { background: #ede9fe; color: #5b21b6; }
+  .tag.red    { background: #fee2e2; color: #991b1b; }
+
+  .qr-code {
+    font-family: monospace; font-size: 12px;
+    background: #f1f5f9; color: #334155;
+    padding: 2px 7px; border-radius: 4px; letter-spacing: .5px;
+  }
+
+  /* ── PAGINATION ── */
+  .pagination {
+    display: flex; align-items: center;
+    justify-content: space-between;
+    margin-top: 14px; font-size: 13px; color: var(--muted);
+  }
+  .page-btns { display: flex; gap: 6px; }
+  .page-btns a, .page-btns span {
+    padding: 5px 12px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 12px; text-decoration: none;
+    background: var(--surface); color: var(--text);
+  }
+  .page-btns a:hover { background: #f5f7ff; }
+  .page-btns span.current { background: var(--accent); color: white; border-color: var(--accent); }
+  .page-btns span.disabled { opacity: .4; }
+
+  /* ── DETAIL PAGE ── */
+  .detail-layout {
+    display: grid; grid-template-columns: 1fr 340px; gap: 20px;
+  }
+  .detail-back {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--muted); text-decoration: none; font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .detail-back:hover { color: var(--accent); }
+
+  .field-group { margin-bottom: 16px; }
+  .field-label {
+    font-size: 11px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .6px; margin-bottom: 4px;
+  }
+  .field-value { font-size: 13.5px; color: var(--text); }
+  .field-value.mono { font-family: monospace; font-size: 12.5px; }
+  .field-value.empty { color: var(--muted); font-style: italic; }
+
+  .prop-list { display: flex; flex-direction: column; gap: 6px; }
+  .prop-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 7px 10px; background: #f8f9fd; border-radius: 6px; font-size: 12.5px;
+  }
+  .prop-name  { color: var(--muted); }
+  .prop-value { font-weight: 500; }
+
+  /* ── LOG ENTRIES ── */
+  .log-list { display: flex; flex-direction: column; gap: 10px; }
+  .log-item {
+    border-left: 3px solid var(--border);
+    padding: 8px 12px; font-size: 12.5px;
+  }
+  .log-item .log-meta { color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+  .log-item.installation { border-color: #16a34a; }
+  .log-item.maintenance  { border-color: #d97706; }
+  .log-item.inspection   { border-color: var(--accent); }
+  .log-item.repair       { border-color: #dc2626; }
+
+  /* ── BOM TREE ── */
+  .bom-tree { font-size: 13px; }
+  .bom-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: 6px; transition: background .1s;
+  }
+  .bom-row:hover { background: #f5f7ff; }
+  .bom-indent {
+    display: inline-block; width: 22px;
+    border-left: 1px dashed #d1d5db; height: 20px;
+  }
+  .bom-name { flex: 1; }
+  .bom-qty  { color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+  /* ── INSTITUTIONS ── */
+  .inst-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; overflow: hidden; }
+  .inst-header { display: flex; align-items: center; gap: 14px; padding: 16px 20px; }
+  .inst-abbr {
+    width: 44px; height: 44px; background: var(--accent); color: white;
+    border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px; flex-shrink: 0;
+  }
+  .inst-meta { flex: 1; }
+  .inst-name { font-weight: 600; font-size: 14.5px; }
+  .inst-info { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .inst-locations { padding: 0 20px 14px; }
+  .loc-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 10px; font-size: 13px; border-radius: 6px;
+  }
+  .loc-row:hover { background: #f5f7ff; }
+  .loc-type { font-size: 11px; color: var(--muted); min-width: 58px; text-transform: capitalize; }
+
+  /* ── EMPTY / ERROR ── */
+  .empty { text-align: center; padding: 48px 20px; color: var(--muted); font-size: 14px; }
+  .alert-error {
+    background: #fee2e2; color: #991b1b; border-radius: 8px;
+    padding: 12px 16px; font-size: 13px; margin-bottom: 16px;
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">
+    <div class="logo-row">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <rect width="28" height="28" rx="7" fill="#3b4fd8"/>
+        <circle cx="14" cy="14" r="6" stroke="white" stroke-width="2" fill="none"/>
+        <circle cx="14" cy="14" r="2" fill="white"/>
+        <line x1="14" y1="4" x2="14" y2="8" stroke="white" stroke-width="1.5"/>
+        <line x1="14" y1="20" x2="14" y2="24" stroke="white" stroke-width="1.5"/>
+        <line x1="4" y1="14" x2="8" y2="14" stroke="white" stroke-width="1.5"/>
+        <line x1="20" y1="14" x2="24" y2="14" stroke="white" stroke-width="1.5"/>
+      </svg>
+      <span class="title">ePIC CDB</span>
+    </div>
+    <div class="subtitle">Component Database</div>
+  </div>
+
+  <div class="nav-section-label">Main</div>
+  <a href="{% url 'dashboard' %}" class="{% if active_page == 'dashboard' %}active{% endif %}">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Dashboard
+  </a>
+
+  <div class="nav-section-label">Catalog</div>
+  <a href="{% url 'component-list' %}" class="{% if active_page == 'components' %}active{% endif %}">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/></svg>
+    Components
+  </a>
+
+  <div class="nav-section-label">Inventory</div>
+  <a href="{% url 'inventory-list' %}" class="{% if active_page == 'inventory' %}active{% endif %}">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+    Inventory
+  </a>
+
+  <div class="nav-section-label">Designs</div>
+  <a href="{% url 'design-list' %}" class="{% if active_page == 'designs' %}active{% endif %}">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Designs &amp; BOM
+  </a>
+
+  <div class="nav-section-label">Reference</div>
+  <a href="{% url 'institution-list' %}" class="{% if active_page == 'institutions' %}active{% endif %}">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    Institutions
+  </a>
+  <a href="{% url 'log-list' %}" class="{% if active_page == 'logs' %}active{% endif %}">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+    Activity Log
+  </a>
+</nav>
+
+<main>
+  {% block content %}{% endblock %}
+</main>
+
+</body>
+</html>

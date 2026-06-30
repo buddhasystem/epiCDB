@@ -1,0 +1,112 @@
+{% extends "cdb/base.html" %}
+{% block title %}{{ design.name }} — ePIC CDB{% endblock %}
+
+{% block content %}
+<a href="{% url 'design-list' %}" class="detail-back">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+  Back to Designs
+</a>
+
+<div class="page-header">
+  <div>
+    <h1>{{ design.name }}</h1>
+    <div class="page-subtitle">
+      <span class="tag purple">{{ design.project }}</span>
+      {% if design.owner_group %}<span class="tag gray" style="margin-left:4px">{{ design.owner_group }}</span>{% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="detail-layout">
+  <div>
+    <!-- BOM -->
+    <div class="card">
+      <h2>Bill of Materials</h2>
+      {% if bom_rows %}
+      <div class="bom-tree">
+        {% for row in bom_rows %}
+        <div class="bom-row">
+          {% for _ in row.indent %}<span class="bom-indent"></span>{% endfor %}
+          <span style="font-size:15px">{% if row.is_design %}📦{% else %}⚙️{% endif %}</span>
+          <span class="bom-name">
+            <strong>{{ row.element.element_name }}</strong>
+            {% if row.element.component %}
+              — <a href="{% url 'component-detail' row.element.component.pk %}" style="color:var(--accent)">{{ row.element.component.name }}</a>
+              {% if row.element.component.model_number %}
+                <span class="qr-code" style="margin-left:4px">{{ row.element.component.model_number }}</span>
+              {% endif %}
+            {% elif row.element.child_design %}
+              — <a href="{% url 'design-detail' row.element.child_design.pk %}" style="color:var(--accent)">{{ row.element.child_design.name }}</a>
+            {% endif %}
+            {% if row.element.installed_instance %}
+              <span class="qr-code" style="margin-left:6px;background:#dcfce7;color:#166534">{{ row.element.installed_instance.qr_id }}</span>
+            {% endif %}
+          </span>
+          <span class="bom-qty">×{{ row.element.quantity }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty" style="padding:16px 0">No elements in this design</div>
+      {% endif %}
+    </div>
+
+    <!-- Log entries -->
+    <div class="card">
+      <h2>Log Entries</h2>
+      {% if design.log_entries.all %}
+      <div class="log-list">
+        {% for log in design.log_entries.all %}
+        <div class="log-item {{ log.topic }}">
+          <div class="log-meta">
+            {{ log.timestamp|date:"N j, Y, P" }}
+            {% if log.topic %}&nbsp;·&nbsp;<span class="tag {% if log.topic == 'installation' %}green{% elif log.topic == 'maintenance' %}yellow{% elif log.topic == 'repair' %}red{% else %}gray{% endif %}">{{ log.topic }}</span>{% endif %}
+            {% if log.logged_by %}&nbsp;·&nbsp;{{ log.logged_by.get_full_name|default:log.logged_by.username }}{% endif %}
+          </div>
+          <div>{{ log.entry }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty" style="padding:12px 0">No log entries</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div>
+    {% if design.description %}
+    <div class="card">
+      <h2>Description</h2>
+      <div style="font-size:13.5px;line-height:1.6">{{ design.description }}</div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <h2>Properties</h2>
+      {% if design.properties.all %}
+      <div class="prop-list">
+        {% for pv in design.properties.all %}
+        <div class="prop-row">
+          <span class="prop-name">{{ pv.property_type }}</span>
+          <span class="prop-value">{{ pv.value }}{% if pv.units %} <span style="color:var(--muted);font-size:11px">{{ pv.units }}</span>{% endif %}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty" style="padding:12px 0">No properties</div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <div class="field-group">
+        <div class="field-label">Created</div>
+        <div class="field-value">{{ design.created_on|date:"N j, Y" }}</div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Last Modified</div>
+        <div class="field-value">{{ design.modified_on|date:"N j, Y" }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
