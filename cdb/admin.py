@@ -107,8 +107,8 @@ class ComponentAdmin(admin.ModelAdmin):
 
 @admin.register(ComponentInstance)
 class ComponentInstanceAdmin(admin.ModelAdmin):
-    list_display    = ("qr_id", "tag", "component", "serial_number", "location", "institution_name", "owner_group")
-    list_filter     = ("component__technical_system", "location__institution", "owner_group")
+    list_display    = ("qr_id", "tag", "component", "serial_number", "location", "institution_name", "owner_group", "owner_user")
+    list_filter     = ("component__technical_system", "location__institution", "owner_group", "owner_user")
     search_fields   = ("qr_id", "tag", "serial_number", "component__name")
     readonly_fields = ("created_on", "modified_on")
     inlines         = [PropertyValueInstanceInline, LogInstanceInline]
