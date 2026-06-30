@@ -12,6 +12,10 @@ __pycache__/
 # Local DB
 db.sqlite3
 
+# Django stuff:
+*/migrations/*
+*migrations*
+
 # C extensions
 *.so
 
