@@ -12,7 +12,7 @@ GET /api/locations/<id>/
 GET /api/locations/<id>/children/        direct children of a location
 GET /api/locations/<id>/instances/       inventory items at this location (and descendants)
 
-GET /api/components/                     catalog list  (filter: technical_system, function, project)
+GET /api/components/                     catalog list  (filter: technical_system, project)
 GET /api/components/<id>/
 GET /api/components/<id>/instances/      all physical instances of this component
 GET /api/components/<id>/designs/        designs that include this component
@@ -59,36 +59,36 @@ try:
     @api_view(["GET"])
     def api_root(request, format=None):
         return Response({
-            "groups":         reverse("group-list",         request=request),
-            "institutions":   reverse("institution-list",   request=request),
-            "locations":      reverse("location-list",      request=request),
-            "components":     reverse("component-list",     request=request),
-            "inventory":      reverse("instance-list",      request=request),
-            "designs":        reverse("design-list",        request=request),
-            "property_types": reverse("propertytype-list",  request=request),
-            "logs":           reverse("log-list",           request=request),
+            "groups":         reverse("group-list",        request=request),
+            "institutions":   reverse("institution-list",  request=request),
+            "locations":      reverse("location-list",     request=request),
+            "components":     reverse("component-list",    request=request),
+            "inventory":      reverse("instance-list",     request=request),
+            "designs":        reverse("design-list",       request=request),
+            "property_types": reverse("propertytype-list", request=request),
+            "logs":           reverse("log-list",          request=request),
         })
 
     # ── Groups ────────────────────────────────────────────────────────────────
 
     class GroupListView(generics.ListAPIView):
-        queryset = Group.objects.all()
+        queryset         = Group.objects.all()
         serializer_class = GroupSerializer
-        filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-        search_fields = ["name", "description"]
-        ordering_fields = ["name"]
+        filter_backends  = [filters.SearchFilter, filters.OrderingFilter]
+        search_fields    = ["name", "description"]
+        ordering_fields  = ["name"]
 
     class GroupDetailView(generics.RetrieveAPIView):
-        queryset = Group.objects.all()
+        queryset         = Group.objects.all()
         serializer_class = GroupSerializer
 
     # ── Institutions ──────────────────────────────────────────────────────────
 
     class InstitutionListView(generics.ListAPIView):
         serializer_class = InstitutionSerializer
-        filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-        search_fields = ["name", "abbreviation", "city", "country"]
-        ordering_fields = ["name", "country"]
+        filter_backends  = [filters.SearchFilter, filters.OrderingFilter]
+        search_fields    = ["name", "abbreviation", "city", "country"]
+        ordering_fields  = ["name", "country"]
 
         def get_queryset(self):
             qs = Institution.objects.all()
@@ -101,9 +101,9 @@ try:
 
     class LocationListView(generics.ListAPIView):
         serializer_class = LocationListSerializer
-        filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-        search_fields = ["name", "description"]
-        ordering_fields = ["name", "location_type"]
+        filter_backends  = [filters.SearchFilter, filters.OrderingFilter]
+        search_fields    = ["name", "description"]
+        ordering_fields  = ["name", "location_type"]
 
         def get_queryset(self):
             qs = Location.objects.select_related("institution", "parent").all()
@@ -116,7 +116,7 @@ try:
             return qs
 
     class LocationDetailView(generics.RetrieveAPIView):
-        queryset = Location.objects.select_related("institution", "parent").all()
+        queryset         = Location.objects.select_related("institution", "parent").all()
         serializer_class = LocationSerializer
 
     class LocationChildrenView(generics.ListAPIView):
@@ -141,17 +141,16 @@ try:
 
     class ComponentListView(generics.ListAPIView):
         serializer_class = ComponentListSerializer
-        filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-        search_fields = ["name", "alternate_name", "model_number", "description"]
-        ordering_fields = ["name", "model_number", "project"]
+        filter_backends  = [filters.SearchFilter, filters.OrderingFilter]
+        search_fields    = ["name", "alternate_name", "model_number", "description"]
+        ordering_fields  = ["name", "model_number", "project"]
 
         def get_queryset(self):
             qs = Component.objects.select_related(
-                "technical_system", "function", "owner_group"
+                "technical_system", "owner_group"
             ).all()
             for param, field in [
                 ("technical_system", "technical_system__name__iexact"),
-                ("function",         "function__name__iexact"),
                 ("project",          "project__iexact"),
                 ("owner_group",      "owner_group__name__iexact"),
             ]:
@@ -165,7 +164,7 @@ try:
             "componentsource_set__source",
             "properties__property_type",
             "log_entries",
-        ).select_related("technical_system", "function", "owner_group", "owner_user")
+        ).select_related("technical_system", "owner_group", "owner_user")
         serializer_class = ComponentSerializer
 
     class ComponentInstancesView(generics.ListAPIView):
@@ -191,9 +190,9 @@ try:
 
     class ComponentInstanceListView(generics.ListAPIView):
         serializer_class = ComponentInstanceListSerializer
-        filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-        search_fields = ["qr_id", "tag", "serial_number", "component__name"]
-        ordering_fields = ["qr_id", "component__name"]
+        filter_backends  = [filters.SearchFilter, filters.OrderingFilter]
+        search_fields    = ["qr_id", "tag", "serial_number", "component__name"]
+        ordering_fields  = ["qr_id", "component__name"]
 
         def get_queryset(self):
             qs = ComponentInstance.objects.select_related(
@@ -220,7 +219,7 @@ try:
 
     class ComponentInstanceByQRView(generics.RetrieveAPIView):
         serializer_class = ComponentInstanceSerializer
-        lookup_field = "qr_id"
+        lookup_field     = "qr_id"
         queryset = ComponentInstance.objects.prefetch_related(
             "properties__property_type", "log_entries"
         ).select_related("component", "location", "location__institution",
@@ -230,9 +229,9 @@ try:
 
     class DesignListView(generics.ListAPIView):
         serializer_class = DesignListSerializer
-        filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-        search_fields = ["name", "description"]
-        ordering_fields = ["name", "project"]
+        filter_backends  = [filters.SearchFilter, filters.OrderingFilter]
+        search_fields    = ["name", "description"]
+        ordering_fields  = ["name", "project"]
 
         def get_queryset(self):
             qs = Design.objects.select_related("owner_group").all()
@@ -257,10 +256,7 @@ try:
         serializer_class = DesignSerializer
 
     class DesignBOMView(generics.GenericAPIView):
-        """
-        Recursive Bill-of-Materials for a Design.
-        Returns a flat list of rows with full path, expanding sub-designs.
-        """
+        """Recursive Bill-of-Materials for a Design."""
         MAX_DEPTH = 10
 
         def get(self, request, pk):
@@ -280,7 +276,7 @@ try:
                 "component", "child_design", "installed_instance"
             ):
                 path = f"{prefix} / {el.element_name}"
-                row = {
+                row  = {
                     "path":         path,
                     "element_name": el.element_name,
                     "element_type": el.element_type(),
@@ -305,9 +301,9 @@ try:
 
     class PropertyTypeListView(generics.ListAPIView):
         serializer_class = PropertyTypeSerializer
-        filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-        search_fields = ["name", "description"]
-        ordering_fields = ["name", "category"]
+        filter_backends  = [filters.SearchFilter, filters.OrderingFilter]
+        search_fields    = ["name", "description"]
+        ordering_fields  = ["name", "category"]
 
         def get_queryset(self):
             qs = PropertyType.objects.all()
@@ -322,9 +318,9 @@ try:
 
     class LogListView(generics.ListAPIView):
         serializer_class = LogEntrySerializer
-        filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-        search_fields = ["entry", "topic"]
-        ordering_fields = ["timestamp", "topic"]
+        filter_backends  = [filters.SearchFilter, filters.OrderingFilter]
+        search_fields    = ["entry", "topic"]
+        ordering_fields  = ["timestamp", "topic"]
 
         def get_queryset(self):
             qs = LogEntry.objects.select_related("logged_by").all()
@@ -343,7 +339,7 @@ try:
 
     def _descendants(root_id, include_self=True):
         """Return all location IDs in the subtree rooted at root_id."""
-        all_locs = list(Location.objects.values("id", "parent_id"))
+        all_locs     = list(Location.objects.values("id", "parent_id"))
         children_map = {}
         for loc in all_locs:
             pid = loc["parent_id"]
@@ -351,7 +347,7 @@ try:
                 children_map[pid] = []
             children_map[pid].append(loc["id"])
         result = []
-        queue = [int(root_id)]
+        queue  = [int(root_id)]
         while queue:
             nid = queue.pop()
             if include_self or nid != int(root_id):
@@ -360,6 +356,4 @@ try:
         return result
 
 except ImportError:
-    # djangorestframework not installed — views unavailable.
-    # Install with: pip install djangorestframework
     pass

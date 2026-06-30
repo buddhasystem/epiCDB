@@ -11,6 +11,6 @@ urlpatterns = [
     path("designs/<int:pk>/",         views_web.design_detail,    name="design-detail"),
     path("systems/",                  views_web.system_list,      name="system-list"),
     path("systems/<int:pk>/",         views_web.system_detail,    name="system-detail"),
-  path("institutions/",             views_web.institution_list, name="institution-list"),
+    path("institutions/",             views_web.institution_list, name="institution-list"),
     path("logs/",                     views_web.log_list,         name="log-list"),
 ]

@@ -30,12 +30,12 @@ class Institution(models.Model):
     Top-level site anchor (BNL, CERN, Fermilab, …).
     Locations belong to an institution, enabling multi-site inventory tracking.
     """
-    name        = models.CharField(max_length=128, unique=True)
-    abbreviation= models.CharField(max_length=16,  blank=True)
-    country     = models.CharField(max_length=64,  blank=True)
-    city        = models.CharField(max_length=64,  blank=True)
-    url         = models.URLField(blank=True)
-    description = models.TextField(blank=True)
+    name         = models.CharField(max_length=128, unique=True)
+    abbreviation = models.CharField(max_length=16,  blank=True)
+    country      = models.CharField(max_length=64,  blank=True)
+    city         = models.CharField(max_length=64,  blank=True)
+    url          = models.URLField(blank=True)
+    description  = models.TextField(blank=True)
 
     def __str__(self):
         return self.abbreviation if self.abbreviation else self.name
@@ -130,13 +130,13 @@ class PropertyType(models.Model):
 # ---------------------------------------------------------------------------
 
 class OwnedModel(models.Model):
-    owner_user  = models.ForeignKey(User,  null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
-    owner_group = models.ForeignKey(Group, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    owner_user      = models.ForeignKey(User,  null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    owner_group     = models.ForeignKey(Group, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     group_writeable = models.BooleanField(default=False)
-    created_by  = models.ForeignKey(User,  null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
-    created_on  = models.DateTimeField(default=timezone.now, editable=False)
-    modified_by = models.ForeignKey(User,  null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
-    modified_on = models.DateTimeField(auto_now=True)
+    created_by      = models.ForeignKey(User,  null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_on      = models.DateTimeField(default=timezone.now, editable=False)
+    modified_by     = models.ForeignKey(User,  null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    modified_on     = models.DateTimeField(auto_now=True)
 
     class Meta:
         abstract = True
@@ -213,18 +213,6 @@ class TechnicalSystem(models.Model):
         ordering = ["name"]
 
 
-class ComponentFunction(models.Model):
-    name             = models.CharField(max_length=64, unique=True)
-    technical_system = models.ForeignKey(TechnicalSystem, null=True, blank=True, on_delete=models.SET_NULL, related_name="functions")
-    description      = models.TextField(blank=True)
-
-    def __str__(self):
-        return self.name
-
-    class Meta:
-        ordering = ["name"]
-
-
 class Source(models.Model):
     name          = models.CharField(max_length=256, unique=True)
     contact_email = models.EmailField(blank=True)
@@ -244,8 +232,7 @@ class Component(OwnedModel):
     model_number     = models.CharField(max_length=128, blank=True)
     description      = models.TextField(blank=True)
     project          = models.CharField(max_length=64,  blank=True, default="ePIC")
-    technical_system = models.ForeignKey(TechnicalSystem,   null=True, blank=True, on_delete=models.SET_NULL, related_name="components")
-    function         = models.ForeignKey(ComponentFunction, null=True, blank=True, on_delete=models.SET_NULL, related_name="components")
+    technical_system = models.ForeignKey(TechnicalSystem, null=True, blank=True, on_delete=models.SET_NULL, related_name="components")
     sources          = models.ManyToManyField(Source, through="ComponentSource", blank=True)
 
     def __str__(self):

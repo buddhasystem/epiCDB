@@ -44,10 +44,7 @@ def _m():
 class LocationClient:
     """Query Institutions and Locations."""
 
-    # Institutions ──────────────────────────────────────────────────
-
     def all_institutions(self):
-        """All Institution rows."""
         return _m().Institution.objects.all()
 
     def get_institution(self, abbreviation=None, name=None):
@@ -59,13 +56,10 @@ class LocationClient:
     def institutions_by_country(self, country: str):
         return _m().Institution.objects.filter(country__iexact=country)
 
-    # Locations ─────────────────────────────────────────────────────
-
     def all_locations(self):
         return _m().Location.objects.select_related("institution", "parent")
 
     def locations_at_institution(self, abbreviation: str):
-        """All locations belonging to an institution."""
         return _m().Location.objects.filter(
             institution__abbreviation=abbreviation
         ).select_related("parent")
@@ -84,10 +78,7 @@ class LocationClient:
         return qs
 
     def location_tree(self, institution_abbr: str) -> list:
-        """
-        Nested list-of-dicts for the full location hierarchy at an institution.
-        Returns roots; each node has {"name", "type", "id", "children": [...]}.
-        """
+        """Nested list-of-dicts for the full location hierarchy at an institution."""
         locs = list(
             _m().Location.objects.filter(
                 institution__abbreviation=institution_abbr
@@ -116,8 +107,7 @@ class CatalogClient:
     """Query the Component Catalog."""
 
     def all_components(self):
-        return _m().Component.objects.select_related(
-            "technical_system", "function", "owner_group")
+        return _m().Component.objects.select_related("technical_system", "owner_group")
 
     def search(self, query: str):
         """Full-text search across name, alternate name, model number, description."""
@@ -125,15 +115,12 @@ class CatalogClient:
         return _m().Component.objects.filter(
             Q(name__icontains=query) | Q(alternate_name__icontains=query) |
             Q(model_number__icontains=query) | Q(description__icontains=query)
-        ).select_related("technical_system", "function")
+        ).select_related("technical_system")
 
     def by_technical_system(self, system_name: str):
         return _m().Component.objects.filter(
             technical_system__name__iexact=system_name
-        ).select_related("function", "owner_group")
-
-    def by_function(self, function_name: str):
-        return _m().Component.objects.filter(function__name__icontains=function_name)
+        ).select_related("owner_group")
 
     def by_project(self, project: str):
         return _m().Component.objects.filter(project__iexact=project)
@@ -172,7 +159,6 @@ class CatalogClient:
             "model_number":     c.model_number,
             "description":      c.description,
             "technical_system": str(c.technical_system),
-            "function":         str(c.function),
             "project":          c.project,
             "owner_group":      str(c.owner_group),
             "instance_count":   self.instance_count(component_name),
@@ -206,13 +192,11 @@ class InventoryClient:
         ).get(qr_id=qr_id)
 
     def instances_of(self, component_name: str):
-        """All physical instances of a component type."""
         return _m().ComponentInstance.objects.filter(
             component__name=component_name
         ).select_related("location", "location__institution", "owner_group")
 
     def at_institution(self, abbreviation: str):
-        """All instances currently at an institution."""
         return _m().ComponentInstance.objects.filter(
             location__institution__abbreviation=abbreviation
         ).select_related("component", "location", "owner_group")
@@ -236,7 +220,6 @@ class InventoryClient:
         ).select_related("component", "location")
 
     def installed_in_design(self, design_name: str):
-        """Instances installed in any element of a named design."""
         return _m().ComponentInstance.objects.filter(
             installed_at__design__name=design_name
         ).select_related("component", "location")
@@ -252,7 +235,6 @@ class InventoryClient:
         ).select_related("property_type")
 
     def institution_summary(self) -> list:
-        """Plain list of dicts: instance counts grouped by institution."""
         from django.db.models import Count
         rows = (
             _m().ComponentInstance.objects
@@ -267,7 +249,6 @@ class InventoryClient:
         ]
 
     def detail(self, qr_id: str) -> dict:
-        """Plain-dict detail for a single instance."""
         inst = self.get_by_qr(qr_id)
         return {
             "qr_id":         inst.qr_id,
@@ -324,10 +305,7 @@ class DesignClient:
             design__name=design_name).select_related("logged_by")
 
     def bom(self, design_name: str, _depth=0, _max=10) -> list:
-        """
-        Recursive Bill of Materials.
-        Returns a list of dicts; sub-designs are expanded under "children".
-        """
+        """Recursive Bill of Materials as a nested list of dicts."""
         if _depth > _max:
             return [{"error": "max depth exceeded"}]
         rows = []
@@ -346,7 +324,6 @@ class DesignClient:
         return rows
 
     def flat_component_list(self, design_name: str) -> list:
-        """Flatten BOM to leaf-component rows only (no sub-designs)."""
         def _flat(rows):
             out = []
             for r in rows:
@@ -357,7 +334,6 @@ class DesignClient:
         return _flat(self.bom(design_name))
 
     def designs_using_component(self, component_name: str):
-        """All designs that directly contain a given component."""
         return _m().Design.objects.filter(
             elements__component__name=component_name).distinct()
 
@@ -390,15 +366,13 @@ class CDBClient:
         self.designs   = DesignClient()
 
     def search_all(self, query: str) -> dict:
-        """Search components, instances, and designs in one call."""
         return {
-            "components": list(self.catalog.search(query).values("id","name","model_number")),
-            "instances":  list(self.inventory.search(query).values("id","qr_id","tag")),
-            "designs":    list(self.designs.search(query).values("id","name")),
+            "components": list(self.catalog.search(query).values("id", "name", "model_number")),
+            "instances":  list(self.inventory.search(query).values("id", "qr_id", "tag")),
+            "designs":    list(self.designs.search(query).values("id", "name")),
         }
 
     def where_is(self, qr_id: str) -> dict:
-        """Location + institution for a QR-coded instance."""
         inst = self.inventory.get_by_qr(qr_id)
         loc  = inst.location
         return {

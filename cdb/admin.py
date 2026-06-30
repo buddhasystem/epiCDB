@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Group, Institution, Location, PropertyType, PropertyValue, LogEntry,
-    TechnicalSystem, ComponentFunction, Source,
+    TechnicalSystem, Source,
     Component, ComponentSource,
     ComponentInstance,
     Design, DesignElement,
@@ -60,19 +60,19 @@ class DesignElementInline(admin.TabularInline):
 
 @admin.register(Group)
 class GroupAdmin(admin.ModelAdmin):
-    list_display = ("name", "description")
+    list_display  = ("name", "description")
     search_fields = ("name",)
 
 @admin.register(Institution)
 class InstitutionAdmin(admin.ModelAdmin):
-    list_display = ("name", "abbreviation", "city", "country", "url")
+    list_display  = ("name", "abbreviation", "city", "country", "url")
     search_fields = ("name", "abbreviation", "city", "country")
-    inlines = [LocationInline]
+    inlines       = [LocationInline]
 
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
-    list_display = ("name", "location_type", "institution", "parent")
-    list_filter  = ("location_type", "institution")
+    list_display  = ("name", "location_type", "institution", "parent")
+    list_filter   = ("location_type", "institution")
     search_fields = ("name",)
 
 @admin.register(PropertyType)
@@ -85,29 +85,23 @@ class PropertyTypeAdmin(admin.ModelAdmin):
 class TechnicalSystemAdmin(admin.ModelAdmin):
     list_display = ("name", "description")
 
-@admin.register(ComponentFunction)
-class ComponentFunctionAdmin(admin.ModelAdmin):
-    list_display = ("name", "technical_system")
-    list_filter  = ("technical_system",)
-
 @admin.register(Source)
 class SourceAdmin(admin.ModelAdmin):
-    list_display = ("name", "contact_email", "url")
+    list_display  = ("name", "contact_email", "url")
     search_fields = ("name",)
 
 # ── Domain 1: Catalog ─────────────────────────────────────────────────────────
 
 @admin.register(Component)
 class ComponentAdmin(admin.ModelAdmin):
-    list_display  = ("name", "model_number", "function", "technical_system", "project", "owner_group", "instance_count")
-    list_filter   = ("technical_system", "function", "project", "owner_group")
-    search_fields = ("name", "alternate_name", "model_number", "description")
+    list_display    = ("name", "model_number", "technical_system", "project", "owner_group", "instance_count")
+    list_filter     = ("technical_system", "project", "owner_group")
+    search_fields   = ("name", "alternate_name", "model_number", "description")
     readonly_fields = ("created_on", "modified_on")
-    inlines = [ComponentSourceInline, PropertyValueComponentInline, ComponentInstanceInline, LogComponentInline]
+    inlines         = [ComponentSourceInline, PropertyValueComponentInline, ComponentInstanceInline, LogComponentInline]
     fieldsets = (
-        ("Identity",        {"fields": ("name", "alternate_name", "model_number", "description", "project")}),
-        ("Classification",  {"fields": ("technical_system", "function")}),
-        ("Ownership",       {"fields": ("owner_user", "owner_group", "group_writeable", "created_by", "created_on", "modified_by", "modified_on"), "classes": ("collapse",)}),
+        ("Identity",   {"fields": ("name", "alternate_name", "model_number", "description", "project", "technical_system")}),
+        ("Ownership",  {"fields": ("owner_user", "owner_group", "group_writeable", "created_by", "created_on", "modified_by", "modified_on"), "classes": ("collapse",)}),
     )
 
     @admin.display(description="# Instances")
@@ -118,11 +112,11 @@ class ComponentAdmin(admin.ModelAdmin):
 
 @admin.register(ComponentInstance)
 class ComponentInstanceAdmin(admin.ModelAdmin):
-    list_display  = ("qr_id", "tag", "component", "serial_number", "location", "institution_name", "owner_group")
-    list_filter   = ("component__technical_system", "location__institution", "owner_group")
-    search_fields = ("qr_id", "tag", "serial_number", "component__name")
+    list_display    = ("qr_id", "tag", "component", "serial_number", "location", "institution_name", "owner_group")
+    list_filter     = ("component__technical_system", "location__institution", "owner_group")
+    search_fields   = ("qr_id", "tag", "serial_number", "component__name")
     readonly_fields = ("created_on", "modified_on")
-    inlines = [PropertyValueInstanceInline, LogInstanceInline]
+    inlines         = [PropertyValueInstanceInline, LogInstanceInline]
     fieldsets = (
         ("Identification", {"fields": ("qr_id", "tag", "serial_number", "component")}),
         ("Location",       {"fields": ("location", "description")}),
@@ -137,11 +131,11 @@ class ComponentInstanceAdmin(admin.ModelAdmin):
 
 @admin.register(Design)
 class DesignAdmin(admin.ModelAdmin):
-    list_display  = ("name", "project", "element_count", "owner_group")
-    list_filter   = ("project", "owner_group")
-    search_fields = ("name", "description")
+    list_display    = ("name", "project", "element_count", "owner_group")
+    list_filter     = ("project", "owner_group")
+    search_fields   = ("name", "description")
     readonly_fields = ("created_on", "modified_on")
-    inlines = [DesignElementInline, PropertyValueDesignInline, LogDesignInline]
+    inlines         = [DesignElementInline, PropertyValueDesignInline, LogDesignInline]
     fieldsets = (
         ("Identity",  {"fields": ("name", "description", "project")}),
         ("Ownership", {"fields": ("owner_user", "owner_group", "group_writeable", "created_by", "created_on", "modified_by", "modified_on"), "classes": ("collapse",)}),
@@ -156,7 +150,7 @@ class DesignElementAdmin(admin.ModelAdmin):
     list_display  = ("element_name", "design", "element_type_display", "component", "child_design", "installed_instance", "quantity")
     list_filter   = ("design",)
     search_fields = ("element_name", "design__name", "component__name")
-    inlines = [PropertyValueElementInline]
+    inlines       = [PropertyValueElementInline]
 
     @admin.display(description="Type")
     def element_type_display(self, obj):
@@ -166,9 +160,9 @@ class DesignElementAdmin(admin.ModelAdmin):
 
 @admin.register(LogEntry)
 class LogEntryAdmin(admin.ModelAdmin):
-    list_display  = ("timestamp", "logged_by", "topic", "short_entry", "component", "component_instance", "design")
-    list_filter   = ("topic",)
-    search_fields = ("entry",)
+    list_display    = ("timestamp", "logged_by", "topic", "short_entry", "component", "component_instance", "design")
+    list_filter     = ("topic",)
+    search_fields   = ("entry",)
     readonly_fields = ("timestamp",)
 
     @admin.display(description="Entry")
@@ -177,6 +171,6 @@ class LogEntryAdmin(admin.ModelAdmin):
 
 @admin.register(PropertyValue)
 class PropertyValueAdmin(admin.ModelAdmin):
-    list_display  = ("property_type", "tag", "value", "units", "component", "component_instance", "design")
-    list_filter   = ("property_type__category", "is_dynamic")
+    list_display = ("property_type", "tag", "value", "units", "component", "component_instance", "design")
+    list_filter  = ("property_type__category", "is_dynamic")
     search_fields = ("tag", "value", "property_type__name")

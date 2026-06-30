@@ -48,7 +48,7 @@ def component_list(request):
     system = request.GET.get('system', '')
 
     qs = Component.objects.select_related(
-        'technical_system', 'function', 'owner_group',
+        'technical_system', 'owner_group',
     ).annotate(instance_count=Count('instances'))
 
     if q:
@@ -80,7 +80,7 @@ def component_detail(request, pk):
             'properties__property_type',
             'log_entries__logged_by',
             'instances__location__institution',
-        ).select_related('technical_system', 'function', 'owner_group', 'owner_user'),
+        ).select_related('technical_system', 'owner_group', 'owner_user'),
         pk=pk,
     )
     context = {'component': comp, 'active_page': 'components'}
@@ -210,7 +210,7 @@ def system_detail(request, pk):
     qs = ComponentInstance.objects.filter(
         component__technical_system=system,
     ).select_related(
-        'component', 'component__function',
+        'component',
         'location', 'location__institution', 'owner_group',
     )
 
