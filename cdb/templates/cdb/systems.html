@@ -1,0 +1,48 @@
+{% extends "cdb/base.html" %}
+{% block title %}Systems — ePIC CDB{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Technical Systems</h1>
+    <div class="page-subtitle">Engineering subsystems — click one to browse its inventory</div>
+  </div>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>System</th>
+        <th>Description</th>
+        <th>Components</th>
+        <th>Inventory Items</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sys in systems %}
+      <tr class="clickable" onclick="location.href='{% url 'system-detail' sys.pk %}'">
+        <td><strong>{{ sys.name }}</strong></td>
+        <td style="color:var(--muted);font-size:12.5px">{{ sys.description|truncatechars:80 }}</td>
+        <td>{{ sys.component_count }}</td>
+        <td>
+          {% if sys.instance_count %}
+            <span class="tag green">{{ sys.instance_count }}</span>
+          {% else %}
+            <span style="color:var(--muted)">0</span>
+          {% endif %}
+        </td>
+        <td style="text-align:right">
+          <a href="{% url 'system-detail' sys.pk %}" class="btn btn-ghost" style="padding:5px 12px;font-size:12px">
+            View inventory →
+          </a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5"><div class="empty">No technical systems defined</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

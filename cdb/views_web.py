@@ -11,6 +11,7 @@ from .models import (
     Institution, LogEntry, TechnicalSystem,
 )
 
+
 PAGE_SIZE = 20
 
 
@@ -185,6 +186,55 @@ def _build_bom(design, depth=0, max_depth=10):
         if el.child_design:
             rows.extend(_build_bom(el.child_design, depth + 1, max_depth))
     return rows
+
+
+# ── Technical Systems ─────────────────────────────────────────────────────────
+
+def system_list(request):
+    """List all technical systems with component and instance counts."""
+    systems = TechnicalSystem.objects.annotate(
+        component_count=Count('components', distinct=True),
+        instance_count=Count('components__instances', distinct=True),
+    ).order_by('name')
+    context = {'systems': systems, 'active_page': 'systems'}
+    return render(request, 'cdb/systems.html', context)
+
+
+def system_detail(request, pk):
+    """Show a single technical system with its inventory items, filterable."""
+    system = get_object_or_404(TechnicalSystem, pk=pk)
+
+    q           = request.GET.get('q', '')
+    institution = request.GET.get('institution', '')
+
+    qs = ComponentInstance.objects.filter(
+        component__technical_system=system,
+    ).select_related(
+        'component', 'component__function',
+        'location', 'location__institution', 'owner_group',
+    )
+
+    if q:
+        qs = qs.filter(
+            Q(qr_id__icontains=q) | Q(tag__icontains=q) |
+            Q(serial_number__icontains=q) | Q(component__name__icontains=q)
+        )
+    if institution:
+        qs = qs.filter(location__institution__abbreviation=institution)
+
+    paginator = Paginator(qs, PAGE_SIZE)
+    page_obj  = paginator.get_page(request.GET.get('page'))
+
+    context = {
+        'system':       system,
+        'page_obj':     page_obj,
+        'q':            q,
+        'institution':  institution,
+        'institutions': Institution.objects.all(),
+        'query_str':    _qs(request),
+        'active_page':  'systems',
+    }
+    return render(request, 'cdb/system_detail.html', context)
 
 
 # ── Institutions & Locations ──────────────────────────────────────────────────
