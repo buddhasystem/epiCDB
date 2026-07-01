@@ -257,12 +257,19 @@ class ComponentSource(models.Model):
 # ---------------------------------------------------------------------------
 
 class ComponentInstance(OwnedModel):
-    qr_id         = models.CharField(max_length=32, unique=True)
-    tag           = models.CharField(max_length=128, blank=True)
-    serial_number = models.CharField(max_length=128, blank=True)
-    component     = models.ForeignKey(Component, on_delete=models.PROTECT, related_name="instances")
-    location      = models.ForeignKey(Location,  null=True, blank=True, on_delete=models.SET_NULL, related_name="instances")
-    description   = models.TextField(blank=True)
+    qr_id            = models.CharField(max_length=32, unique=True)
+    tag              = models.CharField(max_length=128, blank=True)
+    serial_number    = models.CharField(max_length=128, blank=True)
+    component        = models.ForeignKey(Component,       on_delete=models.PROTECT,  related_name="instances")
+    technical_system = models.ForeignKey(TechnicalSystem, null=True, blank=True, on_delete=models.SET_NULL, related_name="component_instances")
+    location         = models.ForeignKey(Location,        null=True, blank=True, on_delete=models.SET_NULL, related_name="instances")
+    description      = models.TextField(blank=True)
+
+    def save(self, *args, **kwargs):
+        """Inherit technical_system from component if not explicitly set."""
+        if self.technical_system_id is None and self.component_id:
+            self.technical_system = self.component.technical_system
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.qr_id} ({self.component.name})"
@@ -305,3 +312,4 @@ class DesignElement(models.Model):
     class Meta:
         ordering = ["element_name"]
         unique_together = [("design", "element_name")]
+                                                                                                                                                                                                                                                

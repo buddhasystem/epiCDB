@@ -33,6 +33,7 @@
         <th>QR ID</th>
         <th>Tag</th>
         <th>Component</th>
+        <th>System</th>
         <th>Serial No.</th>
         <th>Location</th>
         <th>Group</th>
@@ -45,6 +46,7 @@
         <td><span class="qr-code">{{ inst.qr_id }}</span></td>
         <td>{{ inst.tag|default:"—" }}</td>
         <td>{{ inst.component.name }}</td>
+        <td>{% if inst.technical_system %}<span class="tag">{{ inst.technical_system }}</span>{% else %}—{% endif %}</td>
         <td><span style="font-family:monospace;font-size:12px">{{ inst.serial_number|default:"—" }}</span></td>
         <td style="font-size:12.5px">{{ inst.location|default:"—" }}</td>
         <td>{% if inst.owner_group %}<span class="tag gray">{{ inst.owner_group }}</span>{% else %}—{% endif %}</td>
@@ -64,8 +66,8 @@
     {% if page_obj.has_previous %}
       <a href="?{{ query_str }}&page={{ page_obj.previous_page_number }}">← Prev</a>
     {% else %}<span class="disabled">← Prev</span>{% endif %}
-    <span class="current">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
-    {% if page_obj.has_next %}      <a href="?{{ query_str }}&page={{ page_obj.next_page_number }}">Next →</a>
+    <span class="current">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>    {% if page_obj.has_next %}
+      <a href="?{{ query_str }}&page={{ page_obj.next_page_number }}">Next →</a>
     {% else %}<span class="disabled">Next →</span>{% endif %}
   </div>
 </div>

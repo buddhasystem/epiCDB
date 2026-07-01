@@ -43,7 +43,7 @@ class ComponentSourceInline(admin.TabularInline):
 
 class ComponentInstanceInline(admin.TabularInline):
     model = ComponentInstance; extra = 0
-    fields = ("qr_id", "tag", "serial_number", "location", "owner_user", "owner_group")
+    fields = ("qr_id", "tag", "serial_number", "location", "owner_group")
     show_change_link = True
 
 class LocationInline(admin.TabularInline):
@@ -107,13 +107,13 @@ class ComponentAdmin(admin.ModelAdmin):
 
 @admin.register(ComponentInstance)
 class ComponentInstanceAdmin(admin.ModelAdmin):
-    list_display    = ("qr_id", "tag", "component", "serial_number", "location", "institution_name", "owner_group", "owner_user")
-    list_filter     = ("component__technical_system", "location__institution", "owner_group", "owner_user")
+    list_display    = ("qr_id", "tag", "component", "technical_system", "serial_number", "location", "institution_name", "owner_group", "owner_user")
+    list_filter     = ("technical_system", "location__institution", "owner_group")
     search_fields   = ("qr_id", "tag", "serial_number", "component__name")
     readonly_fields = ("created_on", "modified_on")
     inlines         = [PropertyValueInstanceInline, LogInstanceInline]
     fieldsets = (
-        ("Identification", {"fields": ("qr_id", "tag", "serial_number", "component")}),
+        ("Identification", {"fields": ("qr_id", "tag", "serial_number", "component", "technical_system")}),
         ("Location",       {"fields": ("location", "description")}),
         ("Ownership",      {"fields": ("owner_user", "owner_group", "group_writeable", "created_by", "created_on", "modified_by", "modified_on"), "classes": ("collapse",)}),
     )
@@ -121,6 +121,7 @@ class ComponentInstanceAdmin(admin.ModelAdmin):
     @admin.display(description="Institution")
     def institution_name(self, obj):
         return obj.location.institution if obj.location else "—"
+
 
 # ── Domain 3: Designs ─────────────────────────────────────────────────────────
 
@@ -169,4 +170,3 @@ class PropertyValueAdmin(admin.ModelAdmin):
     list_display = ("property_type", "tag", "value", "units", "component", "component_instance", "design")
     list_filter  = ("property_type__category", "is_dynamic")
     search_fields = ("tag", "value", "property_type__name")
-                                                                                                                                             

@@ -94,7 +94,8 @@ def inventory_list(request):
     institution = request.GET.get('institution', '')
 
     qs = ComponentInstance.objects.select_related(
-        'component', 'location', 'location__institution', 'owner_group', 'owner_user',
+        'component', 'technical_system',
+        'location', 'location__institution', 'owner_group', 'owner_user',
     )
     if q:
         qs = qs.filter(
@@ -248,108 +249,6 @@ def inventory_detail(request, pk):
     )
     context = {'instance': instance, 'active_page': 'inventory'}
     return render(request, 'cdb/inventory_detail.html', context)
-
-
-# ── Designs ───────────────────────────────────────────────────────────────────
-
-def design_list(request):
-    q = request.GET.get('q', '')
-
-    qs = Design.objects.select_related('owner_group').annotate(
-        element_count=Count('elements')
-    )
-    if q:
-        qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
-
-    paginator = Paginator(qs, PAGE_SIZE)
-    page_obj  = paginator.get_page(request.GET.get('page'))
-
-    context = {
-        'page_obj':    page_obj,
-        'q':           q,
-        'query_str':   _qs(request),
-        'active_page': 'designs',
-    }
-    return render(request, 'cdb/designs.html', context)
-
-
-def design_detail(request, pk):
-    design = get_object_or_404(
-        Design.objects.prefetch_related(
-            'properties__property_type',
-            'log_entries__logged_by',
-        ).select_related('owner_group', 'owner_user'),
-        pk=pk,
-    )
-    bom_rows = _build_bom(design)
-    context  = {'design': design, 'bom_rows': bom_rows, 'active_page': 'designs'}
-    return render(request, 'cdb/design_detail.html', context)
-
-
-def _build_bom(design, depth=0, max_depth=10):
-    """Flat list of BOM rows with depth info for template indentation."""
-    rows = []
-    if depth > max_depth:
-        return rows
-    for el in DesignElement.objects.filter(design=design).select_related(
-        'component', 'child_design', 'installed_instance'
-    ):
-        rows.append({
-            'element':   el,
-            'depth':     depth,
-            'indent':    list(range(depth)),
-            'is_design': el.child_design_id is not None,
-        })
-        if el.child_design:
-            rows.extend(_build_bom(el.child_design, depth + 1, max_depth))
-    return rows
-
-
-# ── Technical Systems ─────────────────────────────────────────────────────────
-
-def system_list(request):
-    systems = TechnicalSystem.objects.annotate(
-        component_count=Count('components', distinct=True),
-        instance_count=Count('components__instances', distinct=True),
-    ).order_by('name')
-    context = {'systems': systems, 'active_page': 'systems'}
-    return render(request, 'cdb/systems.html', context)
-
-
-def system_detail(request, pk):
-    system = get_object_or_404(TechnicalSystem, pk=pk)
-
-    q           = request.GET.get('q', '')
-    institution = request.GET.get('institution', '')
-
-    qs = ComponentInstance.objects.filter(
-        component__technical_system=system,
-    ).select_related(
-        'component',
-        'location', 'location__institution', 'owner_group',
-    )
-
-    if q:
-        qs = qs.filter(
-            Q(qr_id__icontains=q) | Q(tag__icontains=q) |
-            Q(serial_number__icontains=q) | Q(component__name__icontains=q)
-        )
-    if institution:
-        qs = qs.filter(location__institution__abbreviation=institution)
-
-    paginator = Paginator(qs, PAGE_SIZE)
-    page_obj  = paginator.get_page(request.GET.get('page'))
-
-    context = {
-        'system':       system,
-        'page_obj':     page_obj,
-        'q':            q,
-        'institution':  institution,
-        'institutions': Institution.objects.all(),
-        'query_str':    _qs(request),
-        'active_page':  'systems',
-    }
-    return render(request, 'cdb/system_detail.html', context)
 
 
 # ── Institutions & Locations ──────────────────────────────────────────────────
