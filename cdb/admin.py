@@ -22,6 +22,7 @@ UserAdmin.group_names = group_names
 admin.site.unregister(User)
 admin.site.register(User, UserAdmin)
 
+
 # ── Inlines ──────────────────────────────────────────────────────────────────
 
 class PropertyValueComponentInline(admin.TabularInline):
@@ -128,7 +129,7 @@ class ComponentInstanceAdmin(admin.ModelAdmin):
     readonly_fields = ("created_on", "modified_on")
     inlines         = [PropertyValueInstanceInline, LogInstanceInline]
     fieldsets = (
-        ("Identification", {"fields": ("qr_id", "tag", "serial_number", "component", "technical_system")}),
+        ("Identification", {"fields": ("qr_id", "tag", "serial_number", "component")}),
         ("Location",       {"fields": ("location", "description")}),
         ("Ownership",      {"fields": ("owner_user", "owner_group", "group_writeable", "created_by", "created_on", "modified_by", "modified_on"), "classes": ("collapse",)}),
     )
@@ -185,3 +186,5 @@ class PropertyValueAdmin(admin.ModelAdmin):
     list_display = ("property_type", "tag", "value", "units", "component", "component_instance", "design")
     list_filter  = ("property_type__category", "is_dynamic")
     search_fields = ("tag", "value", "property_type__name")
+
+

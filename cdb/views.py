@@ -39,8 +39,9 @@ try:
     from rest_framework.response import Response
     from rest_framework.reverse import reverse
 
+    from django.contrib.auth.models import Group
     from .models import (
-        Group, Institution, Location, PropertyType, LogEntry,
+        Institution, Location, PropertyType, LogEntry,
         Component, ComponentInstance, Design, DesignElement,
     )
     from .serializers import (
