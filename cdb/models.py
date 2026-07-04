@@ -5,6 +5,7 @@ Supporting: Institution, Location, Ownership, Properties, Logs.
 Groups use Django's built-in auth.Group.
 """
 
+import uuid
 from django.db import models
 from django.contrib.auth.models import User, Group
 from django.utils import timezone
@@ -216,6 +217,7 @@ class Source(models.Model):
 
 
 class Component(OwnedModel):
+    id               = models.CharField(max_length=36, primary_key=True, editable=False)  # UUID4 string
     name             = models.CharField(max_length=256)
     alternate_name   = models.CharField(max_length=256, blank=True)
     model_number     = models.CharField(max_length=128, blank=True)
@@ -223,6 +225,11 @@ class Component(OwnedModel):
     project          = models.CharField(max_length=64,  blank=True, default="ePIC")
     technical_system = models.ForeignKey(TechnicalSystem, null=True, blank=True, on_delete=models.SET_NULL, related_name="components")
     sources          = models.ManyToManyField(Source, through="ComponentSource", blank=True)
+
+    def save(self, *args, **kwargs):
+        if not self.id:
+            self.id = str(uuid.uuid4())
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
@@ -312,4 +319,3 @@ class DesignElement(models.Model):
     class Meta:
         ordering = ["element_name"]
         unique_together = [("design", "element_name")]
-                                                                                                                                                                                                                                                
