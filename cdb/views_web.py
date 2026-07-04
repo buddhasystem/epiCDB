@@ -254,7 +254,10 @@ def inventory_detail(request, pk):
 # ── Institutions & Locations ──────────────────────────────────────────────────
 
 def institution_list(request):
-    institutions = Institution.objects.prefetch_related('locations').all()
+    institutions = Institution.objects.prefetch_related(
+        'locations',
+        'users__user',
+    ).all()
     context = {'institutions': institutions, 'active_page': 'institutions'}
     return render(request, 'cdb/institutions.html', context)
 

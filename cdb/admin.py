@@ -1,27 +1,14 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.models import User
 from .models import (
     Institution, Location, PropertyType, PropertyValue, LogEntry,
     TechnicalSystem, Source,
     Component, ComponentSource,
     ComponentInstance,
     Design, DesignElement,
+    UserProfile,
 )
-
-
-from django.contrib.auth.admin import UserAdmin
-from django.contrib.auth.models import User
-
-UserAdmin.list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'group_names')
-
-def group_names(self, obj):
-    return ', '.join(obj.groups.values_list('name', flat=True))
-group_names.short_description = 'Groups'
-
-UserAdmin.group_names = group_names
-
-admin.site.unregister(User)
-admin.site.register(User, UserAdmin)
-
 
 # ── Inlines ──────────────────────────────────────────────────────────────────
 
@@ -187,4 +174,30 @@ class PropertyValueAdmin(admin.ModelAdmin):
     list_filter  = ("property_type__category", "is_dynamic")
     search_fields = ("tag", "value", "property_type__name")
 
+# ── User admin ────────────────────────────────────────────────────────────────
 
+class UserProfileInline(admin.StackedInline):
+    model = UserProfile
+    can_delete = False
+    verbose_name_plural = 'Profile'
+    fields = ('institution',)
+    extra = 1
+
+class CustomUserAdmin(UserAdmin):
+    list_display = ('username', 'email', 'first_name', 'last_name',
+                    'is_staff', 'institution_name', 'group_names')
+    inlines = [UserProfileInline]
+
+    @admin.display(description='Institution')
+    def institution_name(self, obj):
+        try:
+            return obj.profile.institution or '—'
+        except UserProfile.DoesNotExist:
+            return '—'
+
+    @admin.display(description='Groups')
+    def group_names(self, obj):
+        return ', '.join(obj.groups.values_list('name', flat=True)) or '—'
+
+admin.site.unregister(User)
+admin.site.register(User, CustomUserAdmin)
