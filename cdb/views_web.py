@@ -99,8 +99,8 @@ def inventory_list(request):
     )
     if q:
         qs = qs.filter(
-            Q(qr_id__icontains=q) | Q(tag__icontains=q) |
-            Q(serial_number__icontains=q) | Q(component__name__icontains=q)
+            Q(tag__icontains=q) | Q(serial_number__icontains=q) |
+            Q(component__name__icontains=q)
         )
     if institution:
         qs = qs.filter(location__institution__abbreviation=institution)
@@ -217,8 +217,8 @@ def system_detail(request, pk):
 
     if q:
         qs = qs.filter(
-            Q(qr_id__icontains=q) | Q(tag__icontains=q) |
-            Q(serial_number__icontains=q) | Q(component__name__icontains=q)
+            Q(tag__icontains=q) | Q(serial_number__icontains=q) |
+            Q(component__name__icontains=q)
         )
     if institution:
         qs = qs.filter(location__institution__abbreviation=institution)
@@ -265,8 +265,8 @@ def user_inventory(request, username):
     )
     if q:
         qs = qs.filter(
-            Q(qr_id__icontains=q) | Q(tag__icontains=q) |
-            Q(serial_number__icontains=q) | Q(component__name__icontains=q)
+            Q(tag__icontains=q) | Q(serial_number__icontains=q) |
+            Q(component__name__icontains=q)
         )
 
     paginator = Paginator(qs, PAGE_SIZE)

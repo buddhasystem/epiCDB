@@ -4,15 +4,16 @@
 {% block content %}
 <div class="page-header">
   <div>
-    <h1>Component Inventory</h1>
-    <div class="page-subtitle">Physical instances tracked by QR code</div>
+    <h1>{% if page_title %}{{ page_title }}{% else %}Component Inventory{% endif %}</h1>
+    <div class="page-subtitle">{% if owner %}Filtered to instances where owner = {{ owner.username }}{% else %}Physical component instances{% endif %}</div>
   </div>
+  {% if owner %}<a href="{% url 'inventory-list' %}" class="btn btn-ghost" style="margin-left:auto">← All inventory</a>{% endif %}
 </div>
 
 <form method="get" class="toolbar">
   <div class="search-wrap">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    <input type="text" name="q" value="{{ q }}" placeholder="Search by QR ID, tag, serial, component…">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search by tag, serial number, component…">
   </div>
   <select name="institution" class="filter-select">
     <option value="">All Institutions</option>
@@ -30,7 +31,6 @@
   <table>
     <thead>
       <tr>
-        <th>QR ID</th>
         <th>Tag</th>
         <th>Component</th>
         <th>System</th>
@@ -38,12 +38,12 @@
         <th>Location</th>
         <th>Group</th>
         <th>Owner</th>
+        <th>Created</th>
       </tr>
     </thead>
     <tbody>
       {% for inst in page_obj %}
       <tr class="clickable" onclick="location.href='{% url 'inventory-detail' inst.pk %}'">
-        <td><span class="qr-code">{{ inst.qr_id }}</span></td>
         <td>{{ inst.tag|default:"—" }}</td>
         <td>{{ inst.component.name }}</td>
         <td>{% if inst.technical_system %}<span class="tag">{{ inst.technical_system }}</span>{% else %}—{% endif %}</td>
@@ -51,9 +51,10 @@
         <td style="font-size:12.5px">{{ inst.location|default:"—" }}</td>
         <td>{% if inst.owner_group %}<span class="tag gray">{{ inst.owner_group }}</span>{% else %}—{% endif %}</td>
         <td style="font-size:12.5px">{% if inst.owner_user %}{{ inst.owner_user.get_full_name|default:inst.owner_user.username }}{% else %}—{% endif %}</td>
+        <td style="font-size:12px;color:var(--muted)">{{ inst.created_on|date:"Y-m-d" }}</td>
       </tr>
       {% empty %}
-      <tr><td colspan="7"><div class="empty">No instances found{% if q %} for "{{ q }}"{% endif %}</div></td></tr>
+      <tr><td colspan="8"><div class="empty">No instances found{% if q %} for "{{ q }}"{% endif %}</div></td></tr>
       {% endfor %}
     </tbody>
   </table>

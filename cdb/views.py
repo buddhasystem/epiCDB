@@ -17,10 +17,8 @@ GET /api/components/<id>/
 GET /api/components/<id>/instances/      all physical instances of this component
 GET /api/components/<id>/designs/        designs that include this component
 
-GET /api/inventory/                      all instances (filter: qr_id, component, location)
+GET /api/inventory/                      all instances (filter: tag, component, location)
 GET /api/inventory/<id>/
-GET /api/inventory/qr/<qr_id>/           look up by QR code
-
 GET /api/designs/                        all designs  (filter: project, owner_group)
 GET /api/designs/<id>/
 GET /api/designs/<id>/bom/               Bill-of-Materials (walks sub-designs recursively)
@@ -192,8 +190,8 @@ try:
     class ComponentInstanceListView(generics.ListAPIView):
         serializer_class = ComponentInstanceListSerializer
         filter_backends  = [filters.SearchFilter, filters.OrderingFilter]
-        search_fields    = ["qr_id", "tag", "serial_number", "component__name"]
-        ordering_fields  = ["qr_id", "component__name"]
+        search_fields    = ["tag", "serial_number", "component__name"]
+        ordering_fields  = ["tag", "component__name", "created_on"]
 
         def get_queryset(self):
             qs = ComponentInstance.objects.select_related(
@@ -201,7 +199,7 @@ try:
             ).all()
             for param, field in [
                 ("component",   "component__name__icontains"),
-                ("qr_id",       "qr_id__icontains"),
+
                 ("location",    "location__name__icontains"),
                 ("owner_group", "owner_group__name__iexact"),
                 ("institution", "location__institution__abbreviation__iexact"),
@@ -217,144 +215,3 @@ try:
         ).select_related("component", "location", "location__institution",
                          "owner_group", "owner_user")
         serializer_class = ComponentInstanceSerializer
-
-    class ComponentInstanceByQRView(generics.RetrieveAPIView):
-        serializer_class = ComponentInstanceSerializer
-        lookup_field     = "qr_id"
-        queryset = ComponentInstance.objects.prefetch_related(
-            "properties__property_type", "log_entries"
-        ).select_related("component", "location", "location__institution",
-                         "owner_group", "owner_user")
-
-    # ── Designs ───────────────────────────────────────────────────────────────
-
-    class DesignListView(generics.ListAPIView):
-        serializer_class = DesignListSerializer
-        filter_backends  = [filters.SearchFilter, filters.OrderingFilter]
-        search_fields    = ["name", "description"]
-        ordering_fields  = ["name", "project"]
-
-        def get_queryset(self):
-            qs = Design.objects.select_related("owner_group").all()
-            for param, field in [
-                ("project",     "project__iexact"),
-                ("owner_group", "owner_group__name__iexact"),
-            ]:
-                val = self.request.query_params.get(param)
-                if val:
-                    qs = qs.filter(**{field: val})
-            return qs
-
-    class DesignDetailView(generics.RetrieveAPIView):
-        queryset = Design.objects.prefetch_related(
-            "elements__component",
-            "elements__child_design",
-            "elements__installed_instance",
-            "elements__properties__property_type",
-            "properties__property_type",
-            "log_entries",
-        ).select_related("owner_group", "owner_user")
-        serializer_class = DesignSerializer
-
-    class DesignBOMView(generics.GenericAPIView):
-        """Recursive Bill-of-Materials for a Design."""
-        MAX_DEPTH = 10
-
-        def get(self, request, pk):
-            try:
-                design = Design.objects.get(pk=pk)
-            except Design.DoesNotExist:
-                return Response({"detail": "Not found."}, status=404)
-            rows = []
-            self._walk(design, prefix=design.name, depth=0, rows=rows)
-            return Response({"design": design.name, "bom": rows})
-
-        def _walk(self, design, prefix, depth, rows):
-            if depth > self.MAX_DEPTH:
-                rows.append({"path": prefix, "note": "max depth reached"})
-                return
-            for el in design.elements.select_related(
-                "component", "child_design", "installed_instance"
-            ):
-                path = f"{prefix} / {el.element_name}"
-                row  = {
-                    "path":         path,
-                    "element_name": el.element_name,
-                    "element_type": el.element_type(),
-                    "quantity":     el.quantity,
-                    "description":  el.description,
-                }
-                if el.component:
-                    row["component_id"]   = el.component.id
-                    row["component_name"] = el.component.name
-                    row["model_number"]   = el.component.model_number
-                if el.child_design:
-                    row["child_design_id"]   = el.child_design.id
-                    row["child_design_name"] = el.child_design.name
-                if el.installed_instance:
-                    row["installed_qr_id"] = el.installed_instance.qr_id
-                    row["installed_tag"]   = el.installed_instance.tag
-                rows.append(row)
-                if el.child_design:
-                    self._walk(el.child_design, path, depth + 1, rows)
-
-    # ── Property Types & Logs ─────────────────────────────────────────────────
-
-    class PropertyTypeListView(generics.ListAPIView):
-        serializer_class = PropertyTypeSerializer
-        filter_backends  = [filters.SearchFilter, filters.OrderingFilter]
-        search_fields    = ["name", "description"]
-        ordering_fields  = ["name", "category"]
-
-        def get_queryset(self):
-            qs = PropertyType.objects.all()
-            for param, field in [
-                ("category", "category__iexact"),
-                ("handler",  "handler__iexact"),
-            ]:
-                val = self.request.query_params.get(param)
-                if val:
-                    qs = qs.filter(**{field: val})
-            return qs
-
-    class LogListView(generics.ListAPIView):
-        serializer_class = LogEntrySerializer
-        filter_backends  = [filters.SearchFilter, filters.OrderingFilter]
-        search_fields    = ["entry", "topic"]
-        ordering_fields  = ["timestamp", "topic"]
-
-        def get_queryset(self):
-            qs = LogEntry.objects.select_related("logged_by").all()
-            for param, field in [
-                ("topic",     "topic__iexact"),
-                ("component", "component_id"),
-                ("instance",  "component_instance_id"),
-                ("design",    "design_id"),
-            ]:
-                val = self.request.query_params.get(param)
-                if val:
-                    qs = qs.filter(**{field: val})
-            return qs
-
-    # ── Helpers ───────────────────────────────────────────────────────────────
-
-    def _descendants(root_id, include_self=True):
-        """Return all location IDs in the subtree rooted at root_id."""
-        all_locs     = list(Location.objects.values("id", "parent_id"))
-        children_map = {}
-        for loc in all_locs:
-            pid = loc["parent_id"]
-            if pid not in children_map:
-                children_map[pid] = []
-            children_map[pid].append(loc["id"])
-        result = []
-        queue  = [int(root_id)]
-        while queue:
-            nid = queue.pop()
-            if include_self or nid != int(root_id):
-                result.append(nid)
-            queue.extend(children_map.get(nid, []))
-        return result
-
-except ImportError:
-    pass

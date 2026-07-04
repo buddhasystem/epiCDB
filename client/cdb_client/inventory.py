@@ -17,8 +17,9 @@ class InventoryClient:
     def all_instances(self):
         return self._base_qs()
 
-    def get_by_qr(self, qr_id: str):
-        return self._base_qs().get(qr_id=qr_id)
+    def get(self, pk: str):
+        """Look up a single instance by its UUID primary key."""
+        return self._base_qs().get(pk=pk)
 
     def instances_of(self, component_name: str):
         """All physical instances of a component type."""
@@ -71,7 +72,7 @@ class InventoryClient:
     def search(self, query: str):
         from django.db.models import Q
         return _m().ComponentInstance.objects.filter(
-            Q(qr_id__icontains=query) | Q(tag__icontains=query) |
+            Q(tag__icontains=query) |
             Q(serial_number__icontains=query) | Q(component__name__icontains=query)
         ).select_related("component", "technical_system", "location")
 
@@ -81,14 +82,14 @@ class InventoryClient:
             installed_at__design__name=design_name
         ).select_related("component", "technical_system", "location")
 
-    def logs_for(self, qr_id: str):
+    def logs_for(self, pk: str):
         return _m().LogEntry.objects.filter(
-            component_instance__qr_id=qr_id
+            component_instance__pk=pk
         ).select_related("logged_by")
 
-    def properties_for(self, qr_id: str):
+    def properties_for(self, pk: str):
         return _m().PropertyValue.objects.filter(
-            component_instance__qr_id=qr_id
+            component_instance__pk=pk
         ).select_related("property_type")
 
     def institution_summary(self) -> list:
@@ -121,11 +122,10 @@ class InventoryClient:
             for r in rows
         ]
 
-    def detail(self, qr_id: str) -> dict:
+    def detail(self, pk: str) -> dict:
         """Plain-dict detail view of a single instance."""
-        inst = self.get_by_qr(qr_id)
+        inst = self.get(pk)
         return {
-            "qr_id":            inst.qr_id,
             "tag":              inst.tag,
             "serial_number":    inst.serial_number,
             "description":      inst.description,
@@ -139,11 +139,11 @@ class InventoryClient:
             "properties": [
                 {"type": p.property_type.name, "tag": p.tag,
                  "value": p.value, "units": p.units}
-                for p in self.properties_for(qr_id)
+                for p in self.properties_for(pk)
             ],
             "logs": [
                 {"timestamp": str(lg.timestamp), "topic": lg.topic,
                  "entry": lg.entry, "by": str(lg.logged_by)}
-                for lg in self.logs_for(qr_id)
+                for lg in self.logs_for(pk)
             ],
         }

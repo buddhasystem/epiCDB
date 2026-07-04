@@ -60,7 +60,7 @@ class DesignClient:
             else:
                 entry["ref"]          = el.component.name         if el.component         else None
                 entry["model_number"] = el.component.model_number if el.component         else None
-                entry["installed_qr"] = el.installed_instance.qr_id if el.installed_instance else None
+                entry["installed_id"] = el.installed_instance.pk    if el.installed_instance else None
                 entry["children"]     = []
             rows.append(entry)
         return rows

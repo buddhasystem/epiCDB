@@ -25,19 +25,19 @@ class CDBClient:
                 self.catalog.search(query).values("id", "name", "model_number")
             ),
             "instances": list(
-                self.inventory.search(query).values("id", "qr_id", "tag")
+                self.inventory.search(query).values("id", "tag", "serial_number")
             ),
             "designs": list(
                 self.designs.search(query).values("id", "name")
             ),
         }
 
-    def where_is(self, qr_id: str) -> dict:
-        """Return location dict for a single instance looked up by QR code."""
-        inst = self.inventory.get_by_qr(qr_id)
+    def where_is(self, pk: str) -> dict:
+        """Return location dict for a single instance looked up by UUID primary key."""
+        inst = self.inventory.get(pk)
         loc  = inst.location
         return {
-            "qr_id":            qr_id,
+            "id":               pk,
             "component":        inst.component.name,
             "technical_system": str(inst.technical_system) if inst.technical_system else None,
             "location":         str(loc)              if loc else None,

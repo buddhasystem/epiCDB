@@ -15,8 +15,8 @@ Commands
   systems                       List technical systems with counts
   search         <QUERY>        Cross-domain keyword search
   component      <NAME>         Component summary (JSON)
-  inventory      <QR_ID>        Instance detail (JSON)
-  where          <QR_ID>        Where is this item right now?
+  inventory      <PK>            Instance detail (JSON)
+  where          <PK>            Where is this item right now?
   bom            <DESIGN_NAME>  Bill of Materials (JSON)
 
 Options
@@ -139,7 +139,7 @@ def cmd_component(client, args):
 
 def cmd_inventory(client, args):
     try:
-        data = client.inventory.detail(args.qr_id)
+        data = client.inventory.detail(args.pk)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
@@ -148,14 +148,14 @@ def cmd_inventory(client, args):
 
 def cmd_where(client, args):
     try:
-        data = client.where_is(args.qr_id)
+        data = client.where_is(args.pk)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
     if args.json:
         _json(data)
     else:
-        print(f"QR ID    : {data['qr_id']}")
+        print(f"ID       : {data['id']}")
         print(f"Component: {data['component']}")
         print(f"System   : {data['technical_system'] or '--'}")
         print(f"Location : {data['location'] or '--'}")
@@ -228,11 +228,11 @@ def build_parser():
 
     sp = sub.add_parser("inventory",
                         help="Show instance detail (JSON)")
-    sp.add_argument("qr_id", metavar="QR_ID")
+    sp.add_argument("pk", metavar="PK")
 
     sp = sub.add_parser("where",
                         help="Where is a QR-coded item right now?")
-    sp.add_argument("qr_id", metavar="QR_ID")
+    sp.add_argument("pk", metavar="PK")
 
     sp = sub.add_parser("bom",
                         help="Print Bill of Materials for a design")

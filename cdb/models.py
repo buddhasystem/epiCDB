@@ -313,7 +313,6 @@ class ComponentSource(models.Model):
 
 class ComponentInstance(OwnedModel):
     id = models.CharField(max_length=36, primary_key=True, editable=False)
-    qr_id            = models.CharField(max_length=32, unique=True)
     tag              = models.CharField(max_length=128, blank=True)
     serial_number    = models.CharField(max_length=128, blank=True)
     component        = models.ForeignKey(Component,       on_delete=models.PROTECT,  related_name="instances")
@@ -330,10 +329,11 @@ class ComponentInstance(OwnedModel):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.qr_id} ({self.component.name})"
+        label = self.tag or str(self.pk)[:8]
+        return f"{label} ({self.component.name})"
 
     class Meta:
-        ordering = ["qr_id"]
+        ordering = ["component", "-created_on"]
 
 
 # ---------------------------------------------------------------------------

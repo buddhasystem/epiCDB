@@ -159,7 +159,7 @@ class ComponentInstanceListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = ComponentInstance
-        fields = ["id", "qr_id", "tag", "serial_number",
+        fields = ["id", "tag", "serial_number",
                   "component", "component_name",
                   "location", "location_path",
                   "owner_group", "owner_group_name"]
@@ -179,7 +179,7 @@ class ComponentInstanceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = ComponentInstance
-        fields = ["id", "qr_id", "tag", "serial_number", "description",
+        fields = ["id", "tag", "serial_number", "description",
                   "component", "component_name",
                   "location", "location_path", "institution_name",
                   "owner_user", "owner_username",
@@ -202,7 +202,7 @@ class DesignElementSerializer(serializers.ModelSerializer):
     element_type         = serializers.SerializerMethodField()
     component_name       = serializers.CharField(source="component.name",              read_only=True)
     child_design_name    = serializers.CharField(source="child_design.name",           read_only=True)
-    installed_instance_qr = serializers.CharField(source="installed_instance.qr_id",  read_only=True)
+    installed_instance_id = serializers.CharField(source="installed_instance.id",     read_only=True)
     properties           = PropertyValueSerializer(many=True, read_only=True)
 
     class Meta:
@@ -210,7 +210,7 @@ class DesignElementSerializer(serializers.ModelSerializer):
         fields = ["id", "element_name", "element_type", "quantity", "description",
                   "component", "component_name",
                   "child_design", "child_design_name",
-                  "installed_instance", "installed_instance_qr",
+                  "installed_instance", "installed_instance_id",
                   "properties"]
 
     def get_element_type(self, obj):
