@@ -1,5 +1,5 @@
 {% extends "cdb/base.html" %}
-{% block title %}Institutions — ePIC CDB{% endblock %}
+{% block title %}Institutions -- ePIC CDB{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -17,7 +17,7 @@
       <div class="inst-name">{{ inst.name }}</div>
       <div class="inst-info">
         {% if inst.city %}{{ inst.city }}{% if inst.country %}, {% endif %}{% endif %}{{ inst.country }}
-        {% if inst.url %}&nbsp;·&nbsp;<a href="{{ inst.url }}" target="_blank" style="color:var(--accent)">{{ inst.url }}</a>{% endif %}
+        {% if inst.url %}&nbsp;&middot;&nbsp;<a href="{{ inst.url }}" target="_blank" style="color:var(--accent)">{{ inst.url }}</a>{% endif %}
       </div>
     </div>
     {% with loc_count=inst.locations.count %}
@@ -34,7 +34,7 @@
       <span class="loc-type" style="background:var(--accent-faint,#e8f0fe);color:var(--accent)">
         {{ profile.user.get_full_name|default:profile.user.username }}
       </span>
-      <span style="color:var(--muted);font-size:12px">{{ profile.user.username }}</span>
+      <a href="{% url 'user-inventory' profile.user.username %}" style="color:var(--accent);font-size:12px;text-decoration:none" title="Component instances owned by {{ profile.user.username }}">{{ profile.user.username }}: view owned items</a>
     </div>
     {% endfor %}
   </div>
@@ -48,7 +48,7 @@
     <div class="loc-row">
       <span class="loc-type">{{ loc.location_type }}</span>
       <span>{{ loc.name }}</span>
-      {% if loc.parent %}<span style="color:var(--muted);font-size:12px">↳ {{ loc.parent.name }}</span>{% endif %}
+      {% if loc.parent %}<span style="color:var(--muted);font-size:12px">&rarr; {{ loc.parent.name }}</span>{% endif %}
     </div>
     {% endfor %}
   </div>

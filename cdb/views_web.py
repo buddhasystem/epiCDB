@@ -251,6 +251,38 @@ def inventory_detail(request, pk):
     return render(request, 'cdb/inventory_detail.html', context)
 
 
+# ── User Inventory ───────────────────────────────────────────────────────────
+
+def user_inventory(request, username):
+    """List all component instances owned by a given user."""
+    from django.contrib.auth.models import User as AuthUser
+    owner = get_object_or_404(AuthUser, username=username)
+
+    q = request.GET.get('q', '')
+    qs = ComponentInstance.objects.filter(owner_user=owner).select_related(
+        'component', 'technical_system',
+        'location', 'location__institution', 'owner_group', 'owner_user',
+    )
+    if q:
+        qs = qs.filter(
+            Q(qr_id__icontains=q) | Q(tag__icontains=q) |
+            Q(serial_number__icontains=q) | Q(component__name__icontains=q)
+        )
+
+    paginator = Paginator(qs, PAGE_SIZE)
+    page_obj  = paginator.get_page(request.GET.get('page'))
+
+    context = {
+        'page_obj':    page_obj,
+        'q':           q,
+        'owner':       owner,
+        'query_str':   _qs(request),
+        'active_page': 'inventory',
+        'page_title':  f'Items owned by {owner.get_full_name() or owner.username}',
+    }
+    return render(request, 'cdb/inventory.html', context)
+
+
 # ── Institutions & Locations ──────────────────────────────────────────────────
 
 def institution_list(request):
