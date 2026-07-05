@@ -30,8 +30,20 @@
       </option>
     {% endfor %}
   </select>
+  <select name="system" class="filter-select">
+    <option value="">All Systems</option>
+    {% for sys in systems %}
+      <option value="{{ sys.name }}" {% if system == sys.name %}selected{% endif %}>{{ sys.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="group" class="filter-select">
+    <option value="">All Groups</option>
+    {% for grp in groups %}
+      <option value="{{ grp.name }}" {% if group == grp.name %}selected{% endif %}>{{ grp.name }}</option>
+    {% endfor %}
+  </select>
   <button type="submit" class="btn btn-primary">Search</button>
-  {% if q or institution %}<a href="{% url 'inventory-list' %}" class="btn btn-ghost">Clear</a>{% endif %}
+  {% if q or institution or system or group %}<a href="{% url 'inventory-list' %}" class="btn btn-ghost">Clear</a>{% endif %}
 </form>
 
 {% comment %}Sortable header macro via with blocks{% endcomment %}

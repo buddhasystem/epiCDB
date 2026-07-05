@@ -124,6 +124,8 @@ _INSTANCE_SORT = {
 def inventory_list(request):
     q           = request.GET.get('q', '')
     institution = request.GET.get('institution', '')
+    system      = request.GET.get('system', '')
+    group       = request.GET.get('group', '')
     sort        = request.GET.get('sort', 'created')
     direction   = request.GET.get('dir', 'desc')
 
@@ -138,6 +140,10 @@ def inventory_list(request):
         )
     if institution:
         qs = qs.filter(location__institution__abbreviation=institution)
+    if system:
+        qs = qs.filter(technical_system__name=system)
+    if group:
+        qs = qs.filter(owner_group__name=group)
 
     order_field = _INSTANCE_SORT.get(sort, 'created_on')
     if direction == 'desc':
@@ -151,7 +157,11 @@ def inventory_list(request):
         'page_obj':     page_obj,
         'q':            q,
         'institution':  institution,
+        'system':       system,
+        'group':        group,
         'institutions': Institution.objects.all(),
+        'systems':      TechnicalSystem.objects.all(),
+        'groups':       Group.objects.order_by('name'),
         'sort':         sort,
         'dir':          direction,
         'query_str':    _qs(request),
