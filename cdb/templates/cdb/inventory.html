@@ -2,6 +2,13 @@
 {% block title %}Inventory — ePIC CDB{% endblock %}
 
 {% block content %}
+<style>
+.th-sort { cursor:pointer; white-space:nowrap; user-select:none; }
+.th-sort a { color:inherit; text-decoration:none; display:flex; align-items:center; gap:4px; }
+.sort-icon { font-size:10px; opacity:.45; }
+.sort-icon.active { opacity:1; color:var(--accent); }
+</style>
+
 <div class="page-header">
   <div>
     <h1>{% if page_title %}{{ page_title }}{% else %}Component Inventory{% endif %}</h1>
@@ -27,18 +34,68 @@
   {% if q or institution %}<a href="{% url 'inventory-list' %}" class="btn btn-ghost">Clear</a>{% endif %}
 </form>
 
+{% comment %}Sortable header macro via with blocks{% endcomment %}
+{% with csort=sort cdir=dir cqs=sort_qs %}
 <div class="table-wrap">
   <table>
     <thead>
       <tr>
-        <th>Tag</th>
-        <th>Component</th>
-        <th>System</th>
-        <th>Serial No.</th>
-        <th>Location</th>
-        <th>Group</th>
-        <th>Owner</th>
-        <th>Created</th>
+        {% with col="tag" label="Tag" %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}<span class="sort-icon {% if csort == col %}active{% endif %}">{% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}</span>
+          </a>
+        </th>
+        {% endwith %}
+        {% with col="component" label="Component" %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}<span class="sort-icon {% if csort == col %}active{% endif %}">{% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}</span>
+          </a>
+        </th>
+        {% endwith %}
+        {% with col="system" label="System" %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}<span class="sort-icon {% if csort == col %}active{% endif %}">{% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}</span>
+          </a>
+        </th>
+        {% endwith %}
+        {% with col="serial" label="Serial No." %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}<span class="sort-icon {% if csort == col %}active{% endif %}">{% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}</span>
+          </a>
+        </th>
+        {% endwith %}
+        {% with col="location" label="Location" %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}<span class="sort-icon {% if csort == col %}active{% endif %}">{% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}</span>
+          </a>
+        </th>
+        {% endwith %}
+        {% with col="group" label="Group" %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}<span class="sort-icon {% if csort == col %}active{% endif %}">{% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}</span>
+          </a>
+        </th>
+        {% endwith %}
+        {% with col="owner" label="Owner" %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}<span class="sort-icon {% if csort == col %}active{% endif %}">{% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}</span>
+          </a>
+        </th>
+        {% endwith %}
+        {% with col="created" label="Created" %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}<span class="sort-icon {% if csort == col %}active{% endif %}">{% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}</span>
+          </a>
+        </th>
+        {% endwith %}
       </tr>
     </thead>
     <tbody>
@@ -59,6 +116,7 @@
     </tbody>
   </table>
 </div>
+{% endwith %}
 
 {% if page_obj.paginator.num_pages > 1 %}
 <div class="pagination">
@@ -67,7 +125,8 @@
     {% if page_obj.has_previous %}
       <a href="?{{ query_str }}&page={{ page_obj.previous_page_number }}">← Prev</a>
     {% else %}<span class="disabled">← Prev</span>{% endif %}
-    <span class="current">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>    {% if page_obj.has_next %}
+    <span class="current">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
       <a href="?{{ query_str }}&page={{ page_obj.next_page_number }}">Next →</a>
     {% else %}<span class="disabled">Next →</span>{% endif %}
   </div>

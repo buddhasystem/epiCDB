@@ -43,9 +43,20 @@ def dashboard(request):
 
 # ── Component Catalog ─────────────────────────────────────────────────────────
 
+# Valid sort columns for Component table
+_COMPONENT_SORT = {
+    'name':     'name',
+    'model':    'model_number',
+    'system':   'technical_system__name',
+    'project':  'project',
+    'count':    'instance_count',
+}
+
 def component_list(request):
     q      = request.GET.get('q', '')
     system = request.GET.get('system', '')
+    sort   = request.GET.get('sort', 'name')
+    direction = request.GET.get('dir', 'asc')
 
     qs = Component.objects.select_related(
         'technical_system', 'owner_group',
@@ -59,6 +70,11 @@ def component_list(request):
     if system:
         qs = qs.filter(technical_system__name=system)
 
+    order_field = _COMPONENT_SORT.get(sort, 'name')
+    if direction == 'desc':
+        order_field = '-' + order_field
+    qs = qs.order_by(order_field)
+
     paginator = Paginator(qs, PAGE_SIZE)
     page_obj  = paginator.get_page(request.GET.get('page'))
 
@@ -67,7 +83,10 @@ def component_list(request):
         'q':           q,
         'system':      system,
         'systems':     TechnicalSystem.objects.all(),
-        'query_str':   _qs(request),
+        'sort':        sort,
+        'dir':         direction,
+        'query_str':   _qs(request),           # preserves sort/dir, strips page
+        'sort_qs':     _qs(request, 'sort', 'dir'),  # strips sort/dir for new sort links
         'active_page': 'components',
     }
     return render(request, 'cdb/components.html', context)
@@ -89,9 +108,23 @@ def component_detail(request, pk):
 
 # ── Component Inventory ───────────────────────────────────────────────────────
 
+# Valid sort columns for ComponentInstance table
+_INSTANCE_SORT = {
+    'tag':       'tag',
+    'component': 'component__name',
+    'system':    'technical_system__name',
+    'serial':    'serial_number',
+    'location':  'location__name',
+    'group':     'owner_group__name',
+    'owner':     'owner_user__username',
+    'created':   'created_on',
+}
+
 def inventory_list(request):
     q           = request.GET.get('q', '')
     institution = request.GET.get('institution', '')
+    sort        = request.GET.get('sort', 'created')
+    direction   = request.GET.get('dir', 'desc')
 
     qs = ComponentInstance.objects.select_related(
         'component', 'technical_system',
@@ -105,6 +138,11 @@ def inventory_list(request):
     if institution:
         qs = qs.filter(location__institution__abbreviation=institution)
 
+    order_field = _INSTANCE_SORT.get(sort, 'created_on')
+    if direction == 'desc':
+        order_field = '-' + order_field
+    qs = qs.order_by(order_field)
+
     paginator = Paginator(qs, PAGE_SIZE)
     page_obj  = paginator.get_page(request.GET.get('page'))
 
@@ -113,7 +151,10 @@ def inventory_list(request):
         'q':            q,
         'institution':  institution,
         'institutions': Institution.objects.all(),
+        'sort':         sort,
+        'dir':          direction,
         'query_str':    _qs(request),
+        'sort_qs':      _qs(request, 'sort', 'dir'),
         'active_page':  'inventory',
     }
     return render(request, 'cdb/inventory.html', context)
