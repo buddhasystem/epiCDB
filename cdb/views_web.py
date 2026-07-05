@@ -6,6 +6,7 @@ from django.shortcuts import render, get_object_or_404
 from django.db.models import Q, Count
 from django.core.paginator import Paginator
 
+from django.contrib.auth.models import Group
 from .models import (
     Component, ComponentInstance, Design, DesignElement,
     Institution, LogEntry, TechnicalSystem,
@@ -177,8 +178,17 @@ def inventory_detail(request, pk):
 
 # ── Designs ───────────────────────────────────────────────────────────────────
 
+# Valid sort columns for Design table
+_DESIGN_SORT = {
+    'name':    'name',
+    'count':   'element_count',
+    'group':   'owner_group__name',
+}
+
 def design_list(request):
-    q = request.GET.get('q', '')
+    q         = request.GET.get('q', '')
+    sort      = request.GET.get('sort', 'name')
+    direction = request.GET.get('dir', 'asc')
 
     qs = Design.objects.select_related('owner_group').annotate(
         element_count=Count('elements')
@@ -186,13 +196,21 @@ def design_list(request):
     if q:
         qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
 
+    order_field = _DESIGN_SORT.get(sort, 'name')
+    if direction == 'desc':
+        order_field = '-' + order_field
+    qs = qs.order_by(order_field)
+
     paginator = Paginator(qs, PAGE_SIZE)
     page_obj  = paginator.get_page(request.GET.get('page'))
 
     context = {
         'page_obj':    page_obj,
         'q':           q,
+        'sort':        sort,
+        'dir':         direction,
         'query_str':   _qs(request),
+        'sort_qs':     _qs(request, 'sort', 'dir'),
         'active_page': 'designs',
     }
     return render(request, 'cdb/designs.html', context)

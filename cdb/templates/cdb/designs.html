@@ -2,6 +2,13 @@
 {% block title %}Designs — ePIC CDB{% endblock %}
 
 {% block content %}
+<style>
+.th-sort { cursor:pointer; white-space:nowrap; user-select:none; }
+.th-sort a { color:inherit; text-decoration:none; display:flex; align-items:center; gap:4px; }
+.sort-icon { font-size:10px; opacity:.45; }
+.sort-icon.active { opacity:1; color:var(--accent); }
+</style>
+
 <div class="page-header">
   <div>
     <h1>Designs &amp; Bill of Materials</h1>
@@ -18,14 +25,32 @@
   {% if q %}<a href="{% url 'design-list' %}" class="btn btn-ghost">Clear</a>{% endif %}
 </form>
 
+{% with csort=sort cdir=dir cqs=sort_qs %}
 <div class="table-wrap">
   <table>
     <thead>
       <tr>
-        <th>Design Name</th>
-        <th>Project</th>
-        <th>Elements</th>
-        <th>Owner Group</th>
+        {% with col="name" label="Design Name" %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}<span class="sort-icon {% if csort == col %}active{% endif %}">{% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}</span>
+          </a>
+        </th>
+        {% endwith %}
+        {% with col="count" label="Elements" %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}<span class="sort-icon {% if csort == col %}active{% endif %}">{% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}</span>
+          </a>
+        </th>
+        {% endwith %}
+        {% with col="group" label="Owner Group" %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}<span class="sort-icon {% if csort == col %}active{% endif %}">{% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}</span>
+          </a>
+        </th>
+        {% endwith %}
         <th>Description</th>
       </tr>
     </thead>
@@ -33,17 +58,17 @@
       {% for design in page_obj %}
       <tr class="clickable" onclick="location.href='{% url 'design-detail' design.pk %}'">
         <td><strong>{{ design.name }}</strong></td>
-        <td><span class="tag purple">{{ design.project|default:"—" }}</span></td>
         <td>{{ design.element_count }}</td>
         <td>{% if design.owner_group %}<span class="tag gray">{{ design.owner_group }}</span>{% else %}—{% endif %}</td>
         <td style="color:var(--muted);font-size:12.5px">{{ design.description|truncatechars:60 }}</td>
       </tr>
       {% empty %}
-      <tr><td colspan="5"><div class="empty">No designs found{% if q %} for "{{ q }}"{% endif %}</div></td></tr>
+      <tr><td colspan="4"><div class="empty">No designs found{% if q %} for "{{ q }}"{% endif %}</div></td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+{% endwith %}
 
 {% if page_obj.paginator.num_pages > 1 %}
 <div class="pagination">
