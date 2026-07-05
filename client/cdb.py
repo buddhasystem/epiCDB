@@ -23,11 +23,11 @@ Options
 -------
   --settings  Django settings module  [default: cdb_project.settings]
   --root      Project root directory  [default: parent of bin/]
-  --json      Force JSON output for all commands
+  --yaml      Force YAML output for all commands
 """
 
 import argparse
-import json
+import yaml
 import os
 import sys
 
@@ -55,8 +55,18 @@ def _setup(args):
 # Formatters
 # ---------------------------------------------------------------------------
 
-def _json(obj):
-    print(json.dumps(obj, indent=2, default=str))
+def _yaml(obj):
+    """Serialize obj to YAML, converting non-basic types to strings."""
+    def _fix(o):
+        if isinstance(o, dict):
+            return {k: _fix(v) for k, v in o.items()}
+        if isinstance(o, (list, tuple)):
+            return [_fix(i) for i in o]
+        if isinstance(o, (str, int, float, bool, type(None))):
+            return o
+        return str(o)
+    print(yaml.dump(_fix(obj), default_flow_style=False,
+                    allow_unicode=True, sort_keys=False))
 
 
 def _table(rows, headers):
@@ -78,8 +88,8 @@ def _table(rows, headers):
 
 def cmd_institutions(client, args):
     insts = client.locations.all_institutions()
-    if args.json:
-        _json([{"id": i.pk, "name": i.name, "abbreviation": i.abbreviation,
+    if args.yaml:
+        _yaml([{"id": i.pk, "name": i.name, "abbreviation": i.abbreviation,
                 "city": i.city, "country": i.country, "url": i.url}
                for i in insts])
     else:
@@ -91,8 +101,8 @@ def cmd_institutions(client, args):
 
 def cmd_location_tree(client, args):
     tree = client.locations.location_tree(args.abbr)
-    if args.json:
-        _json(tree)
+    if args.yaml:
+        _yaml(tree)
     else:
         def _print(nodes, indent=0):
             for node in nodes:
@@ -103,8 +113,8 @@ def cmd_location_tree(client, args):
 
 def cmd_systems(client, args):
     rows = client.systems.instance_counts()
-    if args.json:
-        _json(rows)
+    if args.yaml:
+        _yaml(rows)
     else:
         _table(
             [(r["name"], r["components"], r["instances"]) for r in rows],
@@ -115,8 +125,8 @@ def cmd_systems(client, args):
 def cmd_search(client, args):
     query = " ".join(args.query)
     results = client.search_all(query)
-    if args.json:
-        _json(results)
+    if args.yaml:
+        _yaml(results)
     else:
         for domain, items in results.items():
             print(f"\n-- {domain} --")
@@ -134,7 +144,7 @@ def cmd_component(client, args):
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
-    _json(data)
+    _yaml(data)
 
 
 def cmd_inventory(client, args):
@@ -143,7 +153,7 @@ def cmd_inventory(client, args):
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
-    _json(data)
+    _yaml(data)
 
 
 def cmd_where(client, args):
@@ -152,8 +162,8 @@ def cmd_where(client, args):
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
-    if args.json:
-        _json(data)
+    if args.yaml:
+        _yaml(data)
     else:
         print(f"ID       : {data['id']}")
         print(f"Component: {data['component']}")
@@ -171,8 +181,8 @@ def cmd_bom(client, args):
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
-    if args.json:
-        _json(data)
+    if args.yaml:
+        _yaml(data)
     else:
         def _print(rows, indent=0):
             for row in rows:
@@ -201,8 +211,8 @@ def build_parser():
     p.add_argument("--root", default=None,
                    metavar="DIR",
                    help="Project root directory (default: parent of bin/)")
-    p.add_argument("--json", action="store_true",
-                   help="Force JSON output")
+    p.add_argument("--yaml", action="store_true",
+                   help="Force YAML output instead of plain text tables")
 
     sub = p.add_subparsers(dest="command", metavar="COMMAND")
     sub.required = True
