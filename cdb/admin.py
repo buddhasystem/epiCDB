@@ -46,7 +46,8 @@ class ComponentSourceInline(admin.TabularInline):
 
 class ComponentInstanceInline(admin.TabularInline):
     model = ComponentInstance; extra = 0
-    fields = ("tag", "serial_number", "location", "owner_group")
+    fields = ("pk", "tag", "serial_number", "location", "owner_group")
+    readonly_fields = ("pk",)
     show_change_link = True
 
 class LocationInline(admin.TabularInline):
@@ -63,42 +64,42 @@ class DesignElementInline(admin.TabularInline):
 
 @admin.register(Institution)
 class InstitutionAdmin(admin.ModelAdmin):
-    list_display  = ("name", "abbreviation", "city", "country", "url")
+    list_display  = ("pk", "name", "abbreviation", "city", "country", "url")
     search_fields = ("name", "abbreviation", "city", "country")
     inlines       = [LocationInline]
 
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
-    list_display  = ("name", "location_type", "institution", "parent")
+    list_display  = ("pk", "name", "location_type", "institution", "parent")
     list_filter   = ("location_type", "institution")
     search_fields = ("name",)
 
 @admin.register(PropertyType)
 class PropertyTypeAdmin(admin.ModelAdmin):
-    list_display = ("name", "category", "handler", "default_units")
+    list_display = ("pk", "name", "category", "handler", "default_units")
     list_filter  = ("category", "handler")
     search_fields = ("name",)
 
 @admin.register(TechnicalSystem)
 class TechnicalSystemAdmin(admin.ModelAdmin):
-    list_display = ("name", "description")
+    list_display = ("pk", "name", "description")
 
 @admin.register(Source)
 class SourceAdmin(admin.ModelAdmin):
-    list_display  = ("name", "contact_email", "url")
+    list_display  = ("pk", "name", "contact_email", "url")
     search_fields = ("name",)
 
 # ── Domain 1: Catalog ─────────────────────────────────────────────────────────
 
 @admin.register(Component)
 class ComponentAdmin(admin.ModelAdmin):
-    list_display    = ("name", "model_number", "technical_system", "project", "owner_group", "instance_count")
+    list_display    = ("pk", "name", "model_number", "technical_system", "project", "owner_group", "instance_count")
     list_filter     = ("technical_system", "project", "owner_group")
     search_fields   = ("name", "alternate_name", "model_number", "description")
-    readonly_fields = ("created_on", "modified_on")
+    readonly_fields = ("pk", "created_on", "modified_on")
     inlines         = [ComponentSourceInline, PropertyValueComponentInline, ComponentInstanceInline, LogComponentInline]
     fieldsets = (
-        ("Identity",   {"fields": ("name", "alternate_name", "model_number", "description", "project", "technical_system")}),
+        ("Identity",   {"fields": ("pk", "name", "alternate_name", "model_number", "description", "project", "technical_system")}),
         ("Ownership",  {"fields": ("owner_user", "owner_group", "group_writeable", "created_by", "created_on", "modified_by", "modified_on"), "classes": ("collapse",)}),
     )
 
@@ -110,13 +111,13 @@ class ComponentAdmin(admin.ModelAdmin):
 
 @admin.register(ComponentInstance)
 class ComponentInstanceAdmin(admin.ModelAdmin):
-    list_display    = ("tag", "component", "technical_system", "serial_number", "location", "institution_name", "owner_group", "owner_user")
+    list_display    = ("pk", "tag", "component", "technical_system", "serial_number", "location", "institution_name", "owner_group", "owner_user")
     list_filter     = ("technical_system", "location__institution", "owner_group")
     search_fields   = ("tag", "serial_number", "component__name")
-    readonly_fields = ("created_on", "modified_on")
+    readonly_fields = ("pk", "created_on", "modified_on")
     inlines         = [PropertyValueInstanceInline, LogInstanceInline]
     fieldsets = (
-        ("Identification", {"fields": ("tag", "serial_number", "component")}),
+        ("Identification", {"fields": ("pk", "tag", "serial_number", "component")}),
         ("Location",       {"fields": ("location", "description")}),
         ("Ownership",      {"fields": ("owner_user", "owner_group", "group_writeable", "created_by", "created_on", "modified_by", "modified_on"), "classes": ("collapse",)}),
     )
@@ -130,13 +131,13 @@ class ComponentInstanceAdmin(admin.ModelAdmin):
 
 @admin.register(Design)
 class DesignAdmin(admin.ModelAdmin):
-    list_display    = ("name", "project", "element_count", "owner_group")
+    list_display    = ("pk", "name", "project", "element_count", "owner_group")
     list_filter     = ("project", "owner_group")
     search_fields   = ("name", "description")
-    readonly_fields = ("created_on", "modified_on")
+    readonly_fields = ("pk", "created_on", "modified_on")
     inlines         = [DesignElementInline, PropertyValueDesignInline, LogDesignInline]
     fieldsets = (
-        ("Identity",  {"fields": ("name", "description", "project")}),
+        ("Identity",  {"fields": ("pk", "name", "description", "project")}),
         ("Ownership", {"fields": ("owner_user", "owner_group", "group_writeable", "created_by", "created_on", "modified_by", "modified_on"), "classes": ("collapse",)}),
     )
 
@@ -146,7 +147,7 @@ class DesignAdmin(admin.ModelAdmin):
 
 @admin.register(DesignElement)
 class DesignElementAdmin(admin.ModelAdmin):
-    list_display  = ("element_name", "design", "element_type_display", "component", "child_design", "installed_instance", "quantity")
+    list_display  = ("pk", "element_name", "design", "element_type_display", "component", "child_design", "installed_instance", "quantity")
     list_filter   = ("design",)
     search_fields = ("element_name", "design__name", "component__name")
     inlines       = [PropertyValueElementInline]
@@ -159,7 +160,7 @@ class DesignElementAdmin(admin.ModelAdmin):
 
 @admin.register(LogEntry)
 class LogEntryAdmin(admin.ModelAdmin):
-    list_display    = ("timestamp", "logged_by", "topic", "short_entry", "component", "component_instance", "design")
+    list_display    = ("pk", "timestamp", "logged_by", "topic", "short_entry", "component", "component_instance", "design")
     list_filter     = ("topic",)
     search_fields   = ("entry",)
     readonly_fields = ("timestamp",)
@@ -170,7 +171,7 @@ class LogEntryAdmin(admin.ModelAdmin):
 
 @admin.register(PropertyValue)
 class PropertyValueAdmin(admin.ModelAdmin):
-    list_display = ("property_type", "tag", "value", "units", "component", "component_instance", "design")
+    list_display = ("pk", "property_type", "tag", "value", "units", "component", "component_instance", "design")
     list_filter  = ("property_type__category", "is_dynamic")
     search_fields = ("tag", "value", "property_type__name")
 
@@ -184,7 +185,7 @@ class UserProfileInline(admin.StackedInline):
     extra = 1
 
 class CustomUserAdmin(UserAdmin):
-    list_display = ('username', 'email', 'first_name', 'last_name',
+    list_display = ('pk', 'username', 'email', 'first_name', 'last_name',
                     'is_staff', 'institution_name', 'group_names')
     inlines = [UserProfileInline]
 
