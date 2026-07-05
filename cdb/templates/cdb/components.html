@@ -67,16 +67,7 @@
           </a>
         </th>
         {% endwith %}
-        {% with col="project" label="Project" %}
-        <th class="th-sort">
-          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
-            {{ label }}
-            <span class="sort-icon {% if csort == col %}active{% endif %}">
-              {% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}
-            </span>
-          </a>
-        </th>
-        {% endwith %}
+
         {% with col="count" label="Instances" %}
         <th class="th-sort">
           <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
@@ -98,7 +89,6 @@
         </td>
         <td><span class="qr-code">{{ comp.model_number|default:"—" }}</span></td>
         <td>{% if comp.technical_system %}<span class="tag">{{ comp.technical_system }}</span>{% else %}—{% endif %}</td>
-        <td><span class="tag purple">{{ comp.project|default:"—" }}</span></td>
         <td>{{ comp.instance_count }}</td>
       </tr>
       {% empty %}
