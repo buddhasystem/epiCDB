@@ -314,38 +314,90 @@ def cmd_find(client, args):
 def cmd_create_instance(client, args):
     """Create a new ComponentInstance linked to a given Component.
 
-    Examples
-    --------
-      bin/cdb create-instance --by-name "ePIC SVT Silicon Strip Sensor" --tag SN-001
-      bin/cdb create-instance --by-pk   a1b2c3d4-... --serial 20240101 --group SVT
+    Individual flags
+    ----------------
+      bin/cdb create-instance --by-name "ePIC SVT Strip Sensor" --tag SN-001
+      bin/cdb create-instance --by-pk   <UUID> --serial 20240101 --group SVT
+
+    YAML file input
+    ---------------
+      bin/cdb create-instance --from-yaml instance.yaml
+      bin/cdb create-instance --from-yaml -          # read from stdin
+
+    YAML file format::
+
+      by_name: "ePIC SVT Silicon Strip Sensor"   # or: by_pk: <UUID>
+      tag: SN-042
+      serial: "20240315-001"
+      location: "Room 112B"
+      group: SVT
+      owner: jsmith
+      description: "Batch 7, received 2024-03-15"
     """
+    # ── Load inputs: YAML file or individual flags ───────────────────────────
+    if args.from_yaml:
+        import io
+        if args.from_yaml == "-":
+            raw = sys.stdin.read()
+        else:
+            try:
+                with open(args.from_yaml) as fh:
+                    raw = fh.read()
+            except OSError as exc:
+                print(f"Cannot read file: {exc}", file=sys.stderr)
+                sys.exit(1)
+        try:
+            data_in = yaml.safe_load(raw) or {}
+        except yaml.YAMLError as exc:
+            print(f"Invalid YAML: {exc}", file=sys.stderr)
+            sys.exit(1)
+        by_name     = data_in.get("by_name")
+        by_pk       = data_in.get("by_pk")
+        tag         = str(data_in.get("tag", ""))
+        serial      = str(data_in.get("serial", ""))
+        location    = data_in.get("location")
+        group       = data_in.get("group")
+        owner       = data_in.get("owner")
+        description = str(data_in.get("description", ""))
+    else:
+        by_name     = args.by_name
+        by_pk       = args.by_pk
+        tag         = args.tag
+        serial      = args.serial
+        location    = args.location
+        group       = args.group
+        owner       = args.owner
+        description = args.description
+
+    if not by_name and not by_pk:
+        print("Error: supply --by-name or --by-pk (or set by_name/by_pk in the YAML file)",
+              file=sys.stderr)
+        sys.exit(1)
+
     # ── Resolve component ────────────────────────────────────────────────────
     try:
-        if args.by_pk:
-            comp = client.catalog.get(pk=args.by_pk)
-        else:
-            comp = client.catalog.get(name=args.by_name)
+        comp = client.catalog.get(pk=by_pk) if by_pk else client.catalog.get(name=by_name)
     except Exception as exc:
         print(f"Component not found: {exc}", file=sys.stderr)
         sys.exit(1)
 
     # ── Create instance ──────────────────────────────────────────────────────
     try:
-        data = client.inventory.create(
+        result = client.inventory.create(
             component=comp,
-            tag=args.tag,
-            serial_number=args.serial,
-            description=args.description,
-            location_name=args.location,
-            owner_group_name=args.group,
-            owner_username=args.owner,
+            tag=tag,
+            serial_number=serial,
+            description=description,
+            location_name=location,
+            owner_group_name=group,
+            owner_username=owner,
         )
     except Exception as exc:
         print(f"Error creating instance: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Created: {data['id']}")
-    _yaml(data)
+    print(f"Created: {result['id']}")
+    _yaml(result)
 
 
 # ---------------------------------------------------------------------------
@@ -412,7 +464,10 @@ def build_parser():
 
     sp = sub.add_parser("create-instance",
                         help="Create a new ComponentInstance")
-    comp_grp = sp.add_mutually_exclusive_group(required=True)
+    sp.add_argument("--from-yaml",   metavar="FILE",   default=None,
+                    dest="from_yaml",
+                    help="Read all fields from a YAML file (use - for stdin)")
+    comp_grp = sp.add_mutually_exclusive_group(required=False)
     comp_grp.add_argument("--by-name", metavar="NAME", dest="by_name", default=None,
                           help="Identify the component by its exact name")
     comp_grp.add_argument("--by-pk",   metavar="PK",   dest="by_pk",   default=None,
