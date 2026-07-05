@@ -19,6 +19,7 @@ Commands
   where          <PK>            Where is this item right now?
   bom            <DESIGN_NAME>  Bill of Materials (YAML)
   find           <TYPE> <PAT>   List items matching a wildcard pattern
+  create-instance               Create a new ComponentInstance
 
 Options
 -------
@@ -309,6 +310,44 @@ def cmd_find(client, args):
               file=sys.stderr)
         sys.exit(1)
 
+
+def cmd_create_instance(client, args):
+    """Create a new ComponentInstance linked to a given Component.
+
+    Examples
+    --------
+      bin/cdb create-instance --by-name "ePIC SVT Silicon Strip Sensor" --tag SN-001
+      bin/cdb create-instance --by-pk   a1b2c3d4-... --serial 20240101 --group SVT
+    """
+    # ── Resolve component ────────────────────────────────────────────────────
+    try:
+        if args.by_pk:
+            comp = client.catalog.get(pk=args.by_pk)
+        else:
+            comp = client.catalog.get(name=args.by_name)
+    except Exception as exc:
+        print(f"Component not found: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    # ── Create instance ──────────────────────────────────────────────────────
+    try:
+        data = client.inventory.create(
+            component=comp,
+            tag=args.tag,
+            serial_number=args.serial,
+            description=args.description,
+            location_name=args.location,
+            owner_group_name=args.group,
+            owner_username=args.owner,
+        )
+    except Exception as exc:
+        print(f"Error creating instance: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Created: {data['id']}")
+    _yaml(data)
+
+
 # ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
@@ -371,6 +410,26 @@ def build_parser():
     sp.add_argument("pattern", metavar="PATTERN",
                     help="Glob pattern, e.g. \"PbWO4*\" or \"*sensor*\"")
 
+    sp = sub.add_parser("create-instance",
+                        help="Create a new ComponentInstance")
+    comp_grp = sp.add_mutually_exclusive_group(required=True)
+    comp_grp.add_argument("--by-name", metavar="NAME", dest="by_name", default=None,
+                          help="Identify the component by its exact name")
+    comp_grp.add_argument("--by-pk",   metavar="PK",   dest="by_pk",   default=None,
+                          help="Identify the component by its UUID primary key")
+    sp.add_argument("--tag",         metavar="TAG",    default="",
+                    help="Human-readable tag / label for this instance")
+    sp.add_argument("--serial",      metavar="NUM",    default="",
+                    help="Manufacturer serial number")
+    sp.add_argument("--location",    metavar="NAME",   default=None,
+                    help="Location name (must exist in the database)")
+    sp.add_argument("--group",       metavar="GROUP",  default=None,
+                    help="Owner group name (must exist in the database)")
+    sp.add_argument("--owner",       metavar="USER",   default=None,
+                    help="Owner username (must exist in the database)")
+    sp.add_argument("--description", metavar="TEXT",   default="",
+                    help="Free-text description")
+
     return p
 
 
@@ -388,6 +447,7 @@ COMMANDS = {
     "where":         cmd_where,
     "bom":           cmd_bom,
     "find":          cmd_find,
+    "create-instance": cmd_create_instance,
 }
 
 if __name__ == "__main__":

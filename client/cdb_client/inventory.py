@@ -148,3 +148,60 @@ class InventoryClient:
                 for lg in self.logs_for(pk)
             ],
         }
+
+    def create(self, component, tag="", serial_number="", description="",
+               location_name=None, owner_group_name=None,
+               owner_username=None) -> dict:
+        """Create and persist a new ComponentInstance.
+
+        Parameters
+        ----------
+        component       : Component model instance (already fetched)
+        tag             : human-readable label
+        serial_number   : manufacturer serial number
+        description     : free-text notes
+        location_name   : exact Location.name string (optional)
+        owner_group_name: exact Group.name string (optional)
+        owner_username  : exact User.username string (optional)
+        Returns the detail dict of the newly saved instance.
+        """
+        import uuid as _uuid
+        m = _m()
+
+        location = None
+        if location_name:
+            try:
+                location = m.Location.objects.get(name=location_name)
+            except m.Location.DoesNotExist:
+                raise ValueError(f"Location not found: {location_name!r}")
+
+        owner_group = None
+        if owner_group_name:
+            try:
+                owner_group = m.Group.objects.get(name=owner_group_name)
+            except m.Group.DoesNotExist:
+                raise ValueError(f"Group not found: {owner_group_name!r}")
+
+        owner_user = None
+        if owner_username:
+            from django.contrib.auth.models import User
+            try:
+                owner_user = User.objects.get(username=owner_username)
+            except User.DoesNotExist:
+                raise ValueError(f"User not found: {owner_username!r}")
+
+        new_pk = str(_uuid.uuid4())
+
+        inst = m.ComponentInstance(
+            id=new_pk,
+            component=component,
+            tag=tag,
+            serial_number=serial_number,
+            description=description,
+            location=location,
+            owner_group=owner_group,
+            owner_user=owner_user,
+        )
+        inst.save()
+        return self.detail(new_pk)
+
