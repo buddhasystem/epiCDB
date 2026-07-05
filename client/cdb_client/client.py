@@ -44,4 +44,6 @@ class CDBClient:
             "institution":      str(loc.institution)  if loc else None,
             "city":             loc.institution.city    if loc else None,
             "country":          loc.institution.country if loc else None,
+            "owner_user":       inst.owner_user.username if inst.owner_user else None,
+            "owner_group":      str(inst.owner_group) if inst.owner_group else None,
         }

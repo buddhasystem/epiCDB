@@ -126,6 +126,7 @@ class InventoryClient:
         """Plain-dict detail view of a single instance."""
         inst = self.get(pk)
         return {
+            "id":               str(inst.pk),
             "tag":              inst.tag,
             "serial_number":    inst.serial_number,
             "description":      inst.description,

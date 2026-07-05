@@ -14,10 +14,11 @@ Commands
   location-tree  <ABBR>         Location hierarchy for an institution
   systems                       List technical systems with counts
   search         <QUERY>        Cross-domain keyword search
-  component      <NAME>         Component summary (JSON)
-  inventory      <PK>            Instance detail (JSON)
+  component      <NAME>         Component summary (YAML)
+  inventory      <PK>            Instance detail (YAML)
   where          <PK>            Where is this item right now?
-  bom            <DESIGN_NAME>  Bill of Materials (JSON)
+  bom            <DESIGN_NAME>  Bill of Materials (YAML)
+  find           <TYPE> <PAT>   List items matching a wildcard pattern
 
 Options
 -------
@@ -41,10 +42,10 @@ def _setup(args):
     root = args.root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path.insert(0, root)
 
+    import django
     import django.conf
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", args.settings)
     if not django.conf.settings.configured:
-        import django
         django.setup()
 
     from cdb_client import CDBClient
@@ -117,8 +118,8 @@ def cmd_systems(client, args):
         _yaml(rows)
     else:
         _table(
-            [(r["name"], r["components"], r["instances"]) for r in rows],
-            ["Technical System", "Components", "Instances"],
+            [(r["id"], r["name"], r["components"], r["instances"]) for r in rows],
+            ["ID", "Technical System", "Components", "Instances"],
         )
 
 
@@ -172,6 +173,8 @@ def cmd_where(client, args):
         site = data.get("institution") or "--"
         geo  = f"  ({data['city']}, {data['country']})" if data.get("city") else ""
         print(f"Site     : {site}{geo}")
+        print(f"Owner    : {data.get('owner_user') or '--'}")
+        print(f"Group    : {data.get('owner_group') or '--'}")
 
 
 def cmd_bom(client, args):
@@ -194,6 +197,117 @@ def cmd_bom(client, args):
                 _print(row.get("children", []), indent + 1)
         _print(data)
 
+
+
+def cmd_find(client, args):
+    """List items whose name (or tag) matches a glob wildcard pattern.
+
+    Examples
+    --------
+      bin/cdb find component "PbWO4*"
+      bin/cdb find design    "ePIC*"
+      bin/cdb find instance  "*strip*"
+      bin/cdb find system    "SVT*"
+    """
+    import fnmatch
+
+    pat = args.pattern
+
+    def _match(s):
+        return fnmatch.fnmatch((s or "").lower(), pat.lower())
+
+    kind = args.type
+
+    if kind == "component":
+        items = [c for c in client.catalog.all_components() if _match(c.name)]
+        if not items:
+            print("(no matches)")
+            return
+        if args.yaml:
+            _yaml([{"id":               str(c.pk),
+                    "name":             c.name,
+                    "model_number":     c.model_number,
+                    "technical_system": str(c.technical_system) if c.technical_system else None,
+                    "owner_user":       c.owner_user.username if c.owner_user else None,
+                    "owner_group":      str(c.owner_group) if c.owner_group else None}
+                   for c in items])
+        else:
+            _table(
+                [(str(c.pk), c.name, c.model_number or "--",
+                  str(c.technical_system) if c.technical_system else "--",
+                  c.owner_user.username if c.owner_user else "--",
+                  str(c.owner_group) if c.owner_group else "--")
+                 for c in items],
+                ["ID", "Name", "Model No.", "System", "Owner", "Group"],
+            )
+
+    elif kind == "design":
+        items = [d for d in client.designs.all_designs() if _match(d.name)]
+        if not items:
+            print("(no matches)")
+            return
+        if args.yaml:
+            _yaml([{"id":          str(d.pk),
+                    "name":        d.name,
+                    "owner_user":  d.owner_user.username if d.owner_user else None,
+                    "owner_group": str(d.owner_group) if d.owner_group else None,
+                    "description": d.description}
+                   for d in items])
+        else:
+            _table(
+                [(str(d.pk), d.name,
+                  d.owner_user.username if d.owner_user else "--",
+                  str(d.owner_group) if d.owner_group else "--",
+                  d.description[:50] if d.description else "")
+                 for d in items],
+                ["ID", "Name", "Owner", "Group", "Description"],
+            )
+
+    elif kind == "instance":
+        # Match on tag first; fall back to component name
+        items = [i for i in client.inventory.all_instances()
+                 if _match(i.tag) or _match(i.component.name)]
+        if not items:
+            print("(no matches)")
+            return
+        if args.yaml:
+            _yaml([{"id":           str(i.pk),
+                    "tag":          i.tag,
+                    "component":    i.component.name,
+                    "serial_number":i.serial_number,
+                    "location":     str(i.location) if i.location else None,
+                    "owner_user":   i.owner_user.username if i.owner_user else None,
+                    "owner_group":  str(i.owner_group) if i.owner_group else None}
+                   for i in items])
+        else:
+            _table(
+                [(str(i.pk), i.tag or "--", i.component.name,
+                  str(i.location) if i.location else "--",
+                  i.owner_user.username if i.owner_user else "--",
+                  str(i.owner_group) if i.owner_group else "--")
+                 for i in items],
+                ["ID", "Tag", "Component", "Location", "Owner", "Group"],
+            )
+
+    elif kind == "system":
+        items = [s for s in client.systems.all() if _match(s.name)]
+        if not items:
+            print("(no matches)")
+            return
+        if args.yaml:
+            _yaml([{"id": str(s.pk), "name": s.name,
+                    "description": s.description} for s in items])
+        else:
+            _table(
+                [(str(s.pk), s.name,
+                  s.description[:70] if s.description else "") for s in items],
+                ["ID", "Name", "Description"],
+            )
+
+    else:
+        print(f"Unknown type {kind!r}. Choose: component, instance, design, system",
+              file=sys.stderr)
+        sys.exit(1)
 
 # ---------------------------------------------------------------------------
 # Argument parser
@@ -233,11 +347,11 @@ def build_parser():
     sp.add_argument("query", nargs="+", metavar="WORD")
 
     sp = sub.add_parser("component",
-                        help="Show component summary (JSON)")
+                        help="Show component summary (YAML)")
     sp.add_argument("name", nargs="+", metavar="NAME")
 
     sp = sub.add_parser("inventory",
-                        help="Show instance detail (JSON)")
+                        help="Show instance detail (YAML)")
     sp.add_argument("pk", metavar="PK")
 
     sp = sub.add_parser("where",
@@ -247,6 +361,15 @@ def build_parser():
     sp = sub.add_parser("bom",
                         help="Print Bill of Materials for a design")
     sp.add_argument("name", nargs="+", metavar="DESIGN_NAME")
+
+    sp = sub.add_parser("find",
+                        help="List items matching a wildcard name pattern")
+    sp.add_argument("type",
+                    choices=["component", "instance", "design", "system"],
+                    metavar="TYPE",
+                    help="Item type: component, instance, design, or system")
+    sp.add_argument("pattern", metavar="PATTERN",
+                    help="Glob pattern, e.g. \"PbWO4*\" or \"*sensor*\"")
 
     return p
 
@@ -264,6 +387,7 @@ COMMANDS = {
     "inventory":     cmd_inventory,
     "where":         cmd_where,
     "bom":           cmd_bom,
+    "find":          cmd_find,
 }
 
 if __name__ == "__main__":

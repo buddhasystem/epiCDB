@@ -44,7 +44,8 @@ class SystemClient:
             .order_by("name")
         )
         return [
-            {"name":       r.name,
+            {"id":         str(r.pk),
+             "name":       r.name,
              "components": r.component_count,
              "instances":  r.instance_count}
             for r in rows
