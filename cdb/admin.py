@@ -189,6 +189,10 @@ class CustomUserAdmin(UserAdmin):
                     'is_staff', 'institution_name', 'group_names')
     inlines = [UserProfileInline]
 
+    # Specify which columns act as clickable links to the change view
+    list_display_links = ('pk', 'username')
+
+
     @admin.display(description='Institution')
     def institution_name(self, obj):
         try:
