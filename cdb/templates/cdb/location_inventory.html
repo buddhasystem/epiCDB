@@ -1,0 +1,50 @@
+{% extends "cdb/base.html" %}
+{% block title %}Inventory at {{ location.name }} -- ePIC CDB{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Inventory at {{ location.name }}</h1>
+    <div class="page-subtitle">
+      {{ location.location_type|capfirst }}
+      {% if location.parent %}&nbsp;&rarr;&nbsp;{{ location.parent.name }}{% endif %}
+      {% if location.institution %}&nbsp;&middot;&nbsp;{{ location.institution }}{% endif %}
+    </div>
+  </div>
+  <a href="{% url 'institution-list' %}" class="btn-outline">&#8592; Institutions</a>
+</div>
+
+{% if instances %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Tag</th>
+        <th>Component</th>
+        <th>System</th>
+        <th>Serial No.</th>
+        <th>Owner</th>
+        <th>Group</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for inst in instances %}
+      <tr>
+        <td><a href="{% url 'inventory-detail' inst.pk %}" style="font-family:monospace;font-size:12px">{{ inst.pk|slice:":8" }}&hellip;</a></td>
+        <td>{{ inst.tag|default:"—" }}</td>
+        <td><a href="{% url 'component-detail' inst.component.pk %}">{{ inst.component.name }}</a></td>
+        <td>{{ inst.technical_system|default:"—" }}</td>
+        <td>{{ inst.serial_number|default:"—" }}</td>
+        <td>{{ inst.owner_user|default:"—" }}</td>
+        <td>{{ inst.owner_group|default:"—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="table-footer">{{ instances.count }} item{{ instances.count|pluralize }}</div>
+{% else %}
+<div class="empty">No component instances recorded at this location.</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "cdb/base.html" %}
+{% block title %}Inventory owned by {{ owner.username }} -- ePIC CDB{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Inventory: {{ owner.get_full_name|default:owner.username }}</h1>
+    <div class="page-subtitle">Component instances owned by <strong>{{ owner.username }}</strong></div>
+  </div>
+  <a href="{% url 'institution-list' %}" class="btn-outline">&#8592; Institutions</a>
+</div>
+
+{% if instances %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Tag</th>
+        <th>Component</th>
+        <th>System</th>
+        <th>Serial No.</th>
+        <th>Location</th>
+        <th>Group</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for inst in instances %}
+      <tr>
+        <td><a href="{% url 'inventory-detail' inst.pk %}" style="font-family:monospace;font-size:12px">{{ inst.pk|slice:":8" }}&hellip;</a></td>
+        <td>{{ inst.tag|default:"—" }}</td>
+        <td><a href="{% url 'component-detail' inst.component.pk %}">{{ inst.component.name }}</a></td>
+        <td>{{ inst.technical_system|default:"—" }}</td>
+        <td>{{ inst.serial_number|default:"—" }}</td>
+        <td>{{ inst.location|default:"—" }}</td>
+        <td>{{ inst.owner_group|default:"—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="table-footer">{{ instances.count }} item{{ instances.count|pluralize }}</div>
+{% else %}
+<div class="empty">No component instances owned by {{ owner.username }}.</div>
+{% endif %}
+{% endblock %}

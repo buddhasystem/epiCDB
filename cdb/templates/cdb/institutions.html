@@ -47,7 +47,9 @@
     {% for loc in inst.locations.all %}
     <div class="loc-row">
       <span class="loc-type">{{ loc.location_type }}</span>
-      <span>{{ loc.name }}</span>
+      <a href="{% url 'location-inventory' loc.pk %}"
+         style="color:var(--accent);text-decoration:none"
+         title="View all inventory at {{ loc.name }}">{{ loc.name }}</a>
       {% if loc.parent %}<span style="color:var(--muted);font-size:12px">&rarr; {{ loc.parent.name }}</span>{% endif %}
     </div>
     {% endfor %}

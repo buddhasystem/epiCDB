@@ -3,13 +3,13 @@ CDB web views — server-rendered Django pages.
 URL config: cdb/urls_web.py
 """
 from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.models import User, Group
 from django.db.models import Q, Count
 from django.core.paginator import Paginator
 
-from django.contrib.auth.models import Group
 from .models import (
     Component, ComponentInstance, Design, DesignElement,
-    Institution, LogEntry, TechnicalSystem,
+    Institution, Location, LogEntry, TechnicalSystem,
 )
 
 
@@ -44,20 +44,9 @@ def dashboard(request):
 
 # ── Component Catalog ─────────────────────────────────────────────────────────
 
-# Valid sort columns for Component table
-_COMPONENT_SORT = {
-    'name':     'name',
-    'model':    'model_number',
-    'system':   'technical_system__name',
-    'project':  'project',
-    'count':    'instance_count',
-}
-
 def component_list(request):
     q      = request.GET.get('q', '')
     system = request.GET.get('system', '')
-    sort   = request.GET.get('sort', 'name')
-    direction = request.GET.get('dir', 'asc')
 
     qs = Component.objects.select_related(
         'technical_system', 'owner_group',
@@ -71,11 +60,6 @@ def component_list(request):
     if system:
         qs = qs.filter(technical_system__name=system)
 
-    order_field = _COMPONENT_SORT.get(sort, 'name')
-    if direction == 'desc':
-        order_field = '-' + order_field
-    qs = qs.order_by(order_field)
-
     paginator = Paginator(qs, PAGE_SIZE)
     page_obj  = paginator.get_page(request.GET.get('page'))
 
@@ -84,10 +68,7 @@ def component_list(request):
         'q':           q,
         'system':      system,
         'systems':     TechnicalSystem.objects.all(),
-        'sort':        sort,
-        'dir':         direction,
-        'query_str':   _qs(request),           # preserves sort/dir, strips page
-        'sort_qs':     _qs(request, 'sort', 'dir'),  # strips sort/dir for new sort links
+        'query_str':   _qs(request),
         'active_page': 'components',
     }
     return render(request, 'cdb/components.html', context)
@@ -109,46 +90,49 @@ def component_detail(request, pk):
 
 # ── Component Inventory ───────────────────────────────────────────────────────
 
-# Valid sort columns for ComponentInstance table
-_INSTANCE_SORT = {
-    'tag':       'tag',
-    'component': 'component__name',
-    'system':    'technical_system__name',
-    'serial':    'serial_number',
-    'location':  'location__name',
-    'group':     'owner_group__name',
-    'owner':     'owner_user__username',
-    'created':   'created_on',
-}
-
 def inventory_list(request):
     q           = request.GET.get('q', '')
     institution = request.GET.get('institution', '')
     system      = request.GET.get('system', '')
     group       = request.GET.get('group', '')
-    sort        = request.GET.get('sort', 'created')
-    direction   = request.GET.get('dir', 'desc')
+    sort        = request.GET.get('sort', 'component')
+    direction   = request.GET.get('dir', 'asc')
 
     qs = ComponentInstance.objects.select_related(
-        'component', 'technical_system',
+        'component', 'component__technical_system',
         'location', 'location__institution', 'owner_group', 'owner_user',
     )
     if q:
         qs = qs.filter(
-            Q(tag__icontains=q) | Q(serial_number__icontains=q) |
-            Q(component__name__icontains=q)
+            Q(tag__icontains=q) |
+            Q(serial_number__icontains=q) | Q(component__name__icontains=q)
         )
     if institution:
         qs = qs.filter(location__institution__abbreviation=institution)
     if system:
-        qs = qs.filter(technical_system__name=system)
+        qs = qs.filter(component__technical_system__name=system)
     if group:
         qs = qs.filter(owner_group__name=group)
 
-    order_field = _INSTANCE_SORT.get(sort, 'created_on')
+    _sort_map = {
+        'tag':       'tag',
+        'component': 'component__name',
+        'system':    'component__technical_system__name',
+        'serial':    'serial_number',
+        'location':  'location__name',
+        'group':     'owner_group__name',
+        'owner':     'owner_user__username',
+        'created':   'created_on',
+    }
+    order_field = _sort_map.get(sort, 'component__name')
     if direction == 'desc':
         order_field = '-' + order_field
     qs = qs.order_by(order_field)
+
+    _excl   = {'sort', 'dir', 'page'}
+    sort_qs = '&'.join(
+        f'{k}={v}' for k, v in request.GET.items() if k not in _excl
+    )
 
     paginator = Paginator(qs, PAGE_SIZE)
     page_obj  = paginator.get_page(request.GET.get('page'))
@@ -159,13 +143,13 @@ def inventory_list(request):
         'institution':  institution,
         'system':       system,
         'group':        group,
-        'institutions': Institution.objects.all(),
-        'systems':      TechnicalSystem.objects.all(),
-        'groups':       Group.objects.order_by('name'),
         'sort':         sort,
         'dir':          direction,
+        'sort_qs':      sort_qs,
+        'institutions': Institution.objects.all(),
+        'systems':      TechnicalSystem.objects.order_by('name'),
+        'groups':       Group.objects.order_by('name'),
         'query_str':    _qs(request),
-        'sort_qs':      _qs(request, 'sort', 'dir'),
         'active_page':  'inventory',
     }
     return render(request, 'cdb/inventory.html', context)
@@ -188,17 +172,8 @@ def inventory_detail(request, pk):
 
 # ── Designs ───────────────────────────────────────────────────────────────────
 
-# Valid sort columns for Design table
-_DESIGN_SORT = {
-    'name':    'name',
-    'count':   'element_count',
-    'group':   'owner_group__name',
-}
-
 def design_list(request):
-    q         = request.GET.get('q', '')
-    sort      = request.GET.get('sort', 'name')
-    direction = request.GET.get('dir', 'asc')
+    q = request.GET.get('q', '')
 
     qs = Design.objects.select_related('owner_group').annotate(
         element_count=Count('elements')
@@ -206,21 +181,13 @@ def design_list(request):
     if q:
         qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
 
-    order_field = _DESIGN_SORT.get(sort, 'name')
-    if direction == 'desc':
-        order_field = '-' + order_field
-    qs = qs.order_by(order_field)
-
     paginator = Paginator(qs, PAGE_SIZE)
     page_obj  = paginator.get_page(request.GET.get('page'))
 
     context = {
         'page_obj':    page_obj,
         'q':           q,
-        'sort':        sort,
-        'dir':         direction,
         'query_str':   _qs(request),
-        'sort_qs':     _qs(request, 'sort', 'dir'),
         'active_page': 'designs',
     }
     return render(request, 'cdb/designs.html', context)
@@ -286,8 +253,8 @@ def system_detail(request, pk):
 
     if q:
         qs = qs.filter(
-            Q(tag__icontains=q) | Q(serial_number__icontains=q) |
-            Q(component__name__icontains=q)
+            Q(tag__icontains=q) |
+            Q(serial_number__icontains=q) | Q(component__name__icontains=q)
         )
     if institution:
         qs = qs.filter(location__institution__abbreviation=institution)
@@ -298,58 +265,16 @@ def system_detail(request, pk):
         'page_obj':     page_obj,
         'q':            q,
         'institution':  institution,
+        'system':       system.name,
+        'page_title':   'Inventory — ' + system.name,
         'institutions': Institution.objects.all(),
+        'systems':      TechnicalSystem.objects.order_by('name'),
+        'groups':       Group.objects.order_by('name'),
         'query_str':    _qs(request),
         'active_page':  'inventory',
     }
     return render(request, 'cdb/inventory.html', context)
 
-
-def inventory_detail(request, pk):
-    instance = get_object_or_404(
-        ComponentInstance.objects.prefetch_related(
-            'properties__property_type',
-            'log_entries__logged_by',
-        ).select_related(
-            'component', 'location', 'location__institution',
-            'owner_group', 'owner_user',
-        ),
-        pk=pk,
-    )
-    context = {'instance': instance, 'active_page': 'inventory'}
-    return render(request, 'cdb/inventory_detail.html', context)
-
-
-# ── User Inventory ───────────────────────────────────────────────────────────
-
-def user_inventory(request, username):
-    """List all component instances owned by a given user."""
-    from django.contrib.auth.models import User as AuthUser
-    owner = get_object_or_404(AuthUser, username=username)
-
-    q = request.GET.get('q', '')
-    qs = ComponentInstance.objects.filter(owner_user=owner).select_related(
-        'component', 'technical_system',
-        'location', 'location__institution', 'owner_group', 'owner_user',
-    )
-    if q:
-        qs = qs.filter(
-            Q(tag__icontains=q) | Q(serial_number__icontains=q) |
-            Q(component__name__icontains=q)
-        )
-
-    paginator = Paginator(qs, PAGE_SIZE)
-    page_obj  = paginator.get_page(request.GET.get('page'))
-
-    context = {
-        'page_obj':    page_obj,
-        'q':           q,
-        'owner':       owner,
-        'query_str':   _qs(request),
-        'active_page': 'inventory',
-        'page_title':  f'Items owned by {owner.get_full_name() or owner.username}',
-    }
-    return render(request, 'cdb/inventory.html', context)
 
 
 # ── Institutions & Locations ──────────────────────────────────────────────────
@@ -361,6 +286,43 @@ def institution_list(request):
     ).all()
     context = {'institutions': institutions, 'active_page': 'institutions'}
     return render(request, 'cdb/institutions.html', context)
+
+
+def user_inventory(request, username):
+    user = get_object_or_404(User, username=username)
+    instances = ComponentInstance.objects.filter(
+        owner_user=user,
+    ).select_related(
+        'component', 'technical_system',
+        'location', 'location__institution',
+        'owner_group',
+    ).order_by('component__name', 'tag')
+
+    context = {
+        'owner':     user,
+        'instances': instances,
+        'active_page': 'inventory',
+    }
+    return render(request, 'cdb/user_inventory.html', context)
+
+
+def location_inventory(request, pk):
+    location = get_object_or_404(
+        Location.objects.select_related('institution', 'parent'),
+        pk=pk,
+    )
+    instances = ComponentInstance.objects.filter(
+        location=location,
+    ).select_related(
+        'component', 'technical_system', 'owner_group', 'owner_user',
+    ).order_by('component__name', 'tag')
+
+    context = {
+        'location':  location,
+        'instances': instances,
+        'active_page': 'institutions',
+    }
+    return render(request, 'cdb/location_inventory.html', context)
 
 
 # ── Activity Log ──────────────────────────────────────────────────────────────
