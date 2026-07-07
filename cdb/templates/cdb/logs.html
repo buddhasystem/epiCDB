@@ -58,7 +58,7 @@
           {% if log.component %}
             <a href="{% url 'component-detail' log.component.pk %}" style="color:var(--accent)">{{ log.component.name|truncatechars:30 }}</a>
           {% elif log.component_instance %}
-            <a href="{% url 'inventory-detail' log.component_instance.pk %}" style="color:var(--accent)"><span class="qr-code">{{ log.component_instance.qr_id }}</span></a>
+            <a href="{% url 'inventory-detail' log.component_instance.pk %}" style="color:var(--accent)"><span class="mono-code">{% firstof log.component_instance.tag log.component_instance.pk %}</span></a>
           {% elif log.design %}
             <a href="{% url 'design-detail' log.design.pk %}" style="color:var(--accent)">{{ log.design.name|truncatechars:30 }}</a>
           {% else %}—{% endif %}

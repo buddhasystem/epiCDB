@@ -33,13 +33,13 @@
             {% if row.element.component %}
               — <a href="{% url 'component-detail' row.element.component.pk %}" style="color:var(--accent)">{{ row.element.component.name }}</a>
               {% if row.element.component.model_number %}
-                <span class="qr-code" style="margin-left:4px">{{ row.element.component.model_number }}</span>
+                <span class="mono-code" style="margin-left:4px">{{ row.element.component.model_number }}</span>
               {% endif %}
             {% elif row.element.child_design %}
               — <a href="{% url 'design-detail' row.element.child_design.pk %}" style="color:var(--accent)">{{ row.element.child_design.name }}</a>
             {% endif %}
             {% if row.element.installed_instance %}
-              <span class="qr-code" style="margin-left:6px;background:#dcfce7;color:#166534">{{ row.element.installed_instance.qr_id }}</span>
+              <span class="mono-code" style="margin-left:6px;background:#dcfce7;color:#166534">{% firstof row.element.installed_instance.tag row.element.installed_instance.pk %}</span>
             {% endif %}
           </span>
           <span class="bom-qty">×{{ row.element.quantity }}</span>

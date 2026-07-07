@@ -446,7 +446,7 @@ def build_parser():
     sp.add_argument("pk", metavar="PK")
 
     sp = sub.add_parser("where",
-                        help="Where is a QR-coded item right now?")
+                        help="Where is this item right now?")
     sp.add_argument("pk", metavar="PK")
 
     sp = sub.add_parser("bom",

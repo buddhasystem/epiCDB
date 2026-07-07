@@ -39,7 +39,7 @@ The CDB captures three interrelated domains:
 | Domain | Purpose |
 |--------|---------|
 | **Component Catalog** | Reference library of every component *type* — custom-fabricated or commercial — with metadata, drawings, vendors, and properties. |
-| **Component Inventory** | Physical instances of catalog items, each with a unique QR ID, tracked to a specific room, cabinet, or shelf at a specific institution. |
+| **Component Inventory** | Physical instances of catalog items, each with a unique tag, tracked to a specific room, cabinet, or shelf at a specific institution. |
 | **Design Library** | Bill-of-Materials groupings: named assemblies of components and sub-assemblies, with hierarchical nesting and installed-instance tracking. |
 
 A flexible **Properties** system attaches arbitrary typed metadata to any
@@ -176,7 +176,6 @@ adds `part_number`, `cost`, and `role` (`vendor` / `manufacturer` / `both`).
 
 | Field | Description |
 |-------|-------------|
-| `qr_id` | Unique QR/barcode identifier printed on the hardware |
 | `tag` | Human-readable label |
 | `serial_number` | Vendor serial number |
 | `component` | FK → `Component` (catalog type) |
@@ -377,8 +376,8 @@ cc.summary("ePIC SVT Silicon Strip Sensor")
 ```python
 ic = client.inventory
 
-# Look up by QR code
-ic.get_by_qr("000-001-003")
+# Look up a single instance by its primary key (UUID)
+ic.get(pk="5a2c5c0e-479b-4e2f-a7cb-caea37435506")
 
 # All instances of a component type
 ic.instances_of("ePIC SVT Silicon Strip Sensor")
@@ -401,8 +400,8 @@ ic.institution_summary()
 # Returns: [{"institution": "BNL", "count": 7}, {"institution": "FNAL", "count": 1}]
 
 # Full plain-dict detail for a single instance
-ic.detail("000-001-001")
-# Returns: {"qr_id": ..., "location": ..., "institution": ..., "properties": [...], "logs": [...]}
+ic.detail("5a2c5c0e-479b-4e2f-a7cb-caea37435506")
+# Returns: {"id": ..., "tag": ..., "location": ..., "institution": ..., "properties": [...], "logs": [...]}
 ```
 
 ---
@@ -431,7 +430,7 @@ dc.bom("ePIC Tracking System")
 #     {"element": "SVT-L1-SEN-A", "type": "COMPONENT",
 #      "ref": "ePIC SVT Silicon Strip Sensor",
 #      "model_number": "HPK-SVT-01",
-#      "installed_qr": "000-001-001", "children": []},
+#      "installed_id": "5a2c5c0e-479b-4e2f-a7cb-caea37435506", "children": []},
 #     ...
 #   ]}, ...]
 
@@ -456,11 +455,13 @@ client = CDBClient()
 client.search_all("strip")
 # Returns: {"components": [...], "instances": [...], "designs": [...]}
 
-# Where is a QR-coded item right now?
-client.where_is("000-001-003")
-# Returns: {"qr_id": "000-001-003", "component": "ePIC SVT Silicon Strip Sensor",
+# Where is this item right now?
+client.where_is("5a2c5c0e-479b-4e2f-a7cb-caea37435506")
+# Returns: {"id": ..., "component": "ePIC SVT Silicon Strip Sensor",
+#           "technical_system": "Tracking",
 #           "location": "BNL / Building 510 / Room 382",
-#           "institution": "BNL", "city": "Upton", "country": "USA"}
+#           "institution": "BNL", "city": "Upton", "country": "USA",
+#           "owner_user": "tester", "owner_group": "EPIC_TRK"}
 
 # Sub-clients
 client.locations   # LocationClient

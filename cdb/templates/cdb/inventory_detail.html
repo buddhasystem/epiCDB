@@ -1,5 +1,5 @@
 {% extends "cdb/base.html" %}
-{% block title %}{{ instance.qr_id }} — ePIC CDB{% endblock %}
+{% block title %}{% firstof instance.tag instance.pk %} — ePIC CDB{% endblock %}
 
 {% block content %}
 <a href="{% url 'inventory-list' %}" class="detail-back">
@@ -9,7 +9,7 @@
 
 <div class="page-header">
   <div>
-    <h1><span class="qr-code" style="font-size:20px;padding:4px 12px">{{ instance.qr_id }}</span></h1>
+    <h1><span class="mono-code" style="font-size:20px;padding:4px 12px">{% firstof instance.tag instance.pk %}</span></h1>
     <div class="page-subtitle" style="margin-top:8px">
       {{ instance.component.name }}
       {% if instance.owner_group %}<span class="tag gray" style="margin-left:6px">{{ instance.owner_group }}</span>{% endif %}

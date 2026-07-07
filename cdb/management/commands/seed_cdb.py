@@ -141,20 +141,20 @@ class Command(BaseCommand):
         add_prop(component=cpu,  ptype="Form Factor",  tag="", value="MicroTCA")
 
         # Instances — spread across BNL, CERN, FNAL
-        def mkinst(qr, tag, comp, loc, serial="", grp_name="EPIC_TRK"):
-            i, _ = ComponentInstance.objects.get_or_create(qr_id=qr, defaults=dict(
-                tag=tag, component=comp, location=loc, serial_number=serial,
+        def mkinst(tag, comp, loc, serial="", grp_name="EPIC_TRK"):
+            i, _ = ComponentInstance.objects.get_or_create(tag=tag, component=comp, defaults=dict(
+                location=loc, serial_number=serial,
                 owner_group=grp[grp_name], owner_user=admin, created_by=admin))
             return i
 
-        i_svt1 = mkinst("000-001-001","SVT-Sensor-001", svt,  room382,   "HPK-22-001")
-        i_svt2 = mkinst("000-001-002","SVT-Sensor-002", svt,  room382,   "HPK-22-002")
-        i_svt3 = mkinst("000-001-003","SVT-Sensor-003", svt,  cern_lab,  "HPK-22-003")   # at CERN
-        i_svt4 = mkinst("000-001-004","SVT-Sensor-004", svt,  fnal_room, "HPK-22-004")   # at FNAL
-        i_spm1 = mkinst("000-002-001","SiPM-001",       sipm, room382,   "HAM-23-001","EPIC_CAL")
-        i_spm2 = mkinst("000-002-002","SiPM-002",       sipm, cern_lab,  "HAM-23-002","EPIC_CAL")
-        i_cpu1 = mkinst("000-003-001","CPU-001",         cpu,  rack_a1,   "AMC-2013-001","CTL")
-        i_hv1  = mkinst("000-004-001","HV-Mod-001",     hvm,  rack_a1,   "CAEN-22-001", "CTL")
+        i_svt1 = mkinst("SVT-Sensor-001", svt,  room382,   "HPK-22-001")
+        i_svt2 = mkinst("SVT-Sensor-002", svt,  room382,   "HPK-22-002")
+        i_svt3 = mkinst("SVT-Sensor-003", svt,  cern_lab,  "HPK-22-003")   # at CERN
+        i_svt4 = mkinst("SVT-Sensor-004", svt,  fnal_room, "HPK-22-004")   # at FNAL
+        i_spm1 = mkinst("SiPM-001",       sipm, room382,   "HAM-23-001","EPIC_CAL")
+        i_spm2 = mkinst("SiPM-002",       sipm, cern_lab,  "HAM-23-002","EPIC_CAL")
+        i_cpu1 = mkinst("CPU-001",         cpu,  rack_a1,   "AMC-2013-001","CTL")
+        i_hv1  = mkinst("HV-Mod-001",     hvm,  rack_a1,   "CAEN-22-001", "CTL")
 
         add_prop(component_instance=i_svt1, ptype="QA Level", tag="", value="A")
         add_prop(component_instance=i_svt3, ptype="QA Level", tag="", value="B")
@@ -216,3 +216,4 @@ class Command(BaseCommand):
             f"Designs:{Design.objects.count()}  "
             f"Institutions:{Institution.objects.count()}"
         ))
+        

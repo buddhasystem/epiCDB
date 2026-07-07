@@ -87,7 +87,7 @@
           <strong>{{ comp.name }}</strong>
           {% if comp.alternate_name %}<br><span style="font-size:11.5px;color:var(--muted)">{{ comp.alternate_name }}</span>{% endif %}
         </td>
-        <td><span class="qr-code">{{ comp.model_number|default:"—" }}</span></td>
+        <td><span class="mono-code">{{ comp.model_number|default:"—" }}</span></td>
         <td>{% if comp.technical_system %}<span class="tag">{{ comp.technical_system }}</span>{% else %}—{% endif %}</td>
         <td>{{ comp.instance_count }}</td>
       </tr>
