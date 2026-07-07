@@ -135,6 +135,50 @@ def component_detail(request, pk):
 
 @login_required
 def inventory_list(request):
+    """List/search the inventory. Also handles the "Add Inventory Item"
+    pop-up form: a POST here (component, tag, serial number, location,
+    group) creates a ComponentInstance and redirects to its detail page.
+    The owner is always the logged-in user, and the group dropdown is
+    restricted to groups that user actually belongs to. On validation
+    failure the list re-renders with the modal reopened and the entered
+    values kept."""
+    form_error = None
+    form_data  = {}
+
+    if request.method == 'POST':
+        tag           = request.POST.get('tag', '').strip()
+        serial_number = request.POST.get('serial_number', '').strip()
+        component_id  = request.POST.get('component') or None
+        location_id   = request.POST.get('location') or None
+        group_id      = request.POST.get('owner_group') or None
+        form_data = {
+            'tag':           tag,
+            'serial_number': serial_number,
+            'component':     component_id or '',
+            'location':      location_id or '',
+            'owner_group':   group_id or '',
+        }
+
+        user_group_ids = set(request.user.groups.values_list('id', flat=True))
+
+        if not component_id:
+            form_error = 'Please choose a component.'
+        elif not Component.objects.filter(pk=component_id).exists():
+            form_error = 'Please choose a valid component.'
+        elif group_id and int(group_id) not in user_group_ids:
+            form_error = 'You can only assign a group you belong to.'
+        else:
+            instance = ComponentInstance.objects.create(
+                tag=tag,
+                serial_number=serial_number,
+                component_id=component_id,
+                location_id=location_id,
+                owner_group_id=group_id,
+                owner_user=request.user,
+                created_by=request.user,
+            )
+            return redirect('inventory-detail', pk=instance.pk)
+
     q           = request.GET.get('q', '')
     institution = request.GET.get('institution', '')
     system      = request.GET.get('system', '')
@@ -200,6 +244,13 @@ def inventory_list(request):
         'users':        User.objects.order_by('username'),
         'query_str':    _qs(request),
         'active_page':  'inventory',
+        'components':      Component.objects.order_by('name'),
+        'locations':       Location.objects.select_related('institution').order_by('name'),
+        'user_groups':     request.user.groups.order_by('name'),
+        'show_add_button': True,
+        'form_error':      form_error,
+        'form_data':       form_data,
+        'open_modal':      bool(form_error),
     }
     return render(request, 'cdb/inventory.html', context)
 

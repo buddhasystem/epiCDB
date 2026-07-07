@@ -7,6 +7,34 @@
 .th-sort a { color:inherit; text-decoration:none; display:flex; align-items:center; gap:4px; }
 .sort-icon { font-size:10px; opacity:.45; }
 .sort-icon.active { opacity:1; color:var(--accent); }
+
+dialog.modal {
+  border: none; border-radius: 12px; padding: 0;
+  box-shadow: 0 10px 40px rgba(30,34,48,.18);
+  width: 100%; max-width: 420px;
+}
+dialog.modal::backdrop { background: rgba(20,23,34,.45); }
+.modal-header {
+  padding: 18px 22px 14px; border-bottom: 1px solid var(--border);
+}
+.modal-header h2 { font-size: 16px; font-weight: 700; }
+.modal-body { padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; }
+.modal-footer {
+  padding: 14px 22px 20px; display: flex; justify-content: flex-end; gap: 10px;
+}
+.modal-field label {
+  display: block; font-size: 12px; font-weight: 600; color: var(--muted);
+  margin-bottom: 5px;
+}
+.modal-field input, .modal-field select {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 8px; font-size: 13.5px; color: var(--text); background: var(--surface);
+}
+.modal-field input:focus, .modal-field select:focus { outline: none; border-color: var(--accent); }
+.modal-error {
+  background: #fee2e2; color: #991b1b; border-radius: 8px;
+  padding: 9px 12px; font-size: 12.5px;
+}
 </style>
 
 <div class="page-header">
@@ -14,7 +42,77 @@
     <h1>{% if page_title %}{{ page_title }}{% else %}Component Inventory{% endif %}</h1>
     <div class="page-subtitle">Physical component instances</div>
   </div>
+  {% if show_add_button %}
+  <button type="button" class="btn btn-primary" onclick="document.getElementById('add-inventory-modal').showModal()">
+    + Add Inventory Item
+  </button>
+  {% endif %}
 </div>
+
+{% if show_add_button %}
+<dialog id="add-inventory-modal" class="modal">
+  <form method="post" action="{% url 'inventory-list' %}">
+    {% csrf_token %}
+    <div class="modal-header"><h2>Add Inventory Item</h2></div>
+    <div class="modal-body">
+      {% if form_error %}<div class="modal-error">{{ form_error }}</div>{% endif %}
+      <div class="modal-field">
+        <label for="ai-component">Component *</label>
+        <select id="ai-component" name="component" required>
+          <option value="">—</option>
+          {% for comp in components %}
+            <option value="{{ comp.pk }}" {% if form_data.component == comp.pk %}selected{% endif %}>
+              {{ comp.name }}{% if comp.model_number %} ({{ comp.model_number }}){% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="modal-field">
+        <label for="ai-tag">Tag</label>
+        <input type="text" id="ai-tag" name="tag" value="{{ form_data.tag|default:'' }}">
+      </div>
+      <div class="modal-field">
+        <label for="ai-serial">Serial Number</label>
+        <input type="text" id="ai-serial" name="serial_number" value="{{ form_data.serial_number|default:'' }}">
+      </div>
+      <div class="modal-field">
+        <label for="ai-location">Location</label>
+        <select id="ai-location" name="location">
+          <option value="">—</option>
+          {% for loc in locations %}
+            <option value="{{ loc.pk }}" {% if form_data.location == loc.pk %}selected{% endif %}>{{ loc.full_path }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="modal-field">
+        <label for="ai-group">Group</label>
+        <select id="ai-group" name="owner_group">
+          <option value="">—</option>
+          {% for grp in user_groups %}
+            <option value="{{ grp.pk }}" {% if form_data.owner_group == grp.pk|stringformat:"s" or forloop.first and not form_data %}selected{% endif %}>{{ grp.name }}</option>
+          {% endfor %}
+        </select>
+        {% if not user_groups %}<div style="font-size:11.5px;color:var(--muted);margin-top:4px">You don't belong to any group yet.</div>{% endif %}
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost" onclick="document.getElementById('add-inventory-modal').close()">Cancel</button>
+      <button type="submit" class="btn btn-primary">Create</button>
+    </div>
+  </form>
+</dialog>
+<script>
+  (function () {
+    var dlg = document.getElementById('add-inventory-modal');
+    dlg.addEventListener('click', function (e) {
+      if (e.target === dlg) dlg.close();
+    });
+    {% if open_modal %}
+    dlg.showModal();
+    {% endif %}
+  })();
+</script>
+{% endif %}
 
 <form method="get" class="toolbar">
   <div class="search-wrap">
