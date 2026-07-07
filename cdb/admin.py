@@ -82,7 +82,8 @@ class PropertyTypeAdmin(admin.ModelAdmin):
 
 @admin.register(TechnicalSystem)
 class TechnicalSystemAdmin(admin.ModelAdmin):
-    list_display = ("pk", "name", "description")
+    list_display = ("pk", "name", "group", "description")
+    list_filter  = ("group",)
 
 @admin.register(Source)
 class SourceAdmin(admin.ModelAdmin):

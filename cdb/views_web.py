@@ -2,7 +2,8 @@
 CDB web views — server-rendered Django pages.
 URL config: cdb/urls_web.py
 """
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
+from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User, Group
 from django.db.models import Q, Count
@@ -48,6 +49,41 @@ def dashboard(request):
 
 @login_required
 def component_list(request):
+    """List/search the component catalog. Also handles the "New Component"
+    pop-up form: a POST here (name, alternate_name, model_number,
+    technical_system -- the same fields shown in the table) creates a
+    Component and redirects to its detail page. On validation failure the
+    list re-renders with the modal reopened and the entered values kept."""
+    form_error = None
+    form_data  = {}
+
+    if request.method == 'POST':
+        name                 = request.POST.get('name', '').strip()
+        alternate_name       = request.POST.get('alternate_name', '').strip()
+        model_number         = request.POST.get('model_number', '').strip()
+        technical_system_id  = request.POST.get('technical_system') or None
+        form_data = {
+            'name':             name,
+            'alternate_name':   alternate_name,
+            'model_number':     model_number,
+            'technical_system': technical_system_id or '',
+        }
+
+        if not name:
+            form_error = 'Name is required.'
+        elif Component.objects.filter(name=name, project='ePIC').exists():
+            form_error = f'A component named "{name}" already exists.'
+        else:
+            comp = Component.objects.create(
+                name=name,
+                alternate_name=alternate_name,
+                model_number=model_number,
+                technical_system_id=technical_system_id,
+                owner_user=request.user,
+                created_by=request.user,
+            )
+            return redirect('component-detail', pk=comp.pk)
+
     q      = request.GET.get('q', '')
     system = request.GET.get('system', '')
 
@@ -70,9 +106,12 @@ def component_list(request):
         'page_obj':    page_obj,
         'q':           q,
         'system':      system,
-        'systems':     TechnicalSystem.objects.all(),
+        'systems':     TechnicalSystem.objects.order_by('name'),
         'query_str':   _qs(request),
         'active_page': 'components',
+        'form_error':  form_error,
+        'form_data':   form_data,
+        'open_modal':  bool(form_error),
     }
     return render(request, 'cdb/components.html', context)
 
@@ -100,6 +139,7 @@ def inventory_list(request):
     institution = request.GET.get('institution', '')
     system      = request.GET.get('system', '')
     group       = request.GET.get('group', '')
+    owner       = request.GET.get('owner', '')
     sort        = request.GET.get('sort', 'component')
     direction   = request.GET.get('dir', 'asc')
 
@@ -118,6 +158,8 @@ def inventory_list(request):
         qs = qs.filter(component__technical_system__name=system)
     if group:
         qs = qs.filter(owner_group__name=group)
+    if owner:
+        qs = qs.filter(owner_user__username=owner)
 
     _sort_map = {
         'tag':       'tag',
@@ -148,12 +190,14 @@ def inventory_list(request):
         'institution':  institution,
         'system':       system,
         'group':        group,
+        'owner':        owner,
         'sort':         sort,
         'dir':          direction,
         'sort_qs':      sort_qs,
         'institutions': Institution.objects.all(),
         'systems':      TechnicalSystem.objects.order_by('name'),
         'groups':       Group.objects.order_by('name'),
+        'users':        User.objects.order_by('username'),
         'query_str':    _qs(request),
         'active_page':  'inventory',
     }
@@ -238,7 +282,7 @@ def _build_bom(design, depth=0, max_depth=10):
 @login_required
 def system_list(request):
     """List all technical systems with component and instance counts."""
-    systems = TechnicalSystem.objects.annotate(
+    systems = TechnicalSystem.objects.select_related('group').annotate(
         component_count=Count('components', distinct=True),
         instance_count=Count('components__instances', distinct=True),
     ).order_by('name')
@@ -251,8 +295,28 @@ def system_detail(request, pk):
     """Show a single technical system with its inventory items, filterable."""
     system = get_object_or_404(TechnicalSystem, pk=pk)
 
+    # The "System" dropdown in inventory.html posts back to this same URL
+    # via GET. Since the system itself is chosen via the URL's <pk>, not a
+    # query param, switching the dropdown has to redirect to the newly
+    # selected system's own detail page (preserving the other filters)
+    # rather than silently being ignored.
+    selected_name = request.GET.get('system', '')
+    if selected_name and selected_name != system.name:
+        other = TechnicalSystem.objects.filter(name=selected_name).first()
+        if other:
+            params = request.GET.copy()
+            params.pop('system', None)
+            params.pop('page', None)
+            query = params.urlencode()
+            url = reverse('system-detail', args=[other.pk])
+            if query:
+                url = f'{url}?{query}'
+            return redirect(url)
+
     q           = request.GET.get('q', '')
     institution = request.GET.get('institution', '')
+    group       = request.GET.get('group', '')
+    owner       = request.GET.get('owner', '')
 
     qs = ComponentInstance.objects.filter(
         component__technical_system=system,
@@ -268,6 +332,10 @@ def system_detail(request, pk):
         )
     if institution:
         qs = qs.filter(location__institution__abbreviation=institution)
+    if group:
+        qs = qs.filter(owner_group__name=group)
+    if owner:
+        qs = qs.filter(owner_user__username=owner)
     paginator = Paginator(qs, PAGE_SIZE)
     page_obj  = paginator.get_page(request.GET.get('page'))
 
@@ -276,10 +344,13 @@ def system_detail(request, pk):
         'q':            q,
         'institution':  institution,
         'system':       system.name,
+        'group':        group,
+        'owner':        owner,
         'page_title':   'Inventory — ' + system.name,
         'institutions': Institution.objects.all(),
         'systems':      TechnicalSystem.objects.order_by('name'),
         'groups':       Group.objects.order_by('name'),
+        'users':        User.objects.order_by('username'),
         'query_str':    _qs(request),
         'active_page':  'inventory',
     }

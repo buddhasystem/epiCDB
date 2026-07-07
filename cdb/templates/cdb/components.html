@@ -7,6 +7,34 @@
 .th-sort a { color:inherit; text-decoration:none; display:flex; align-items:center; gap:4px; }
 .sort-icon { font-size:10px; opacity:.45; }
 .sort-icon.active { opacity:1; color:var(--accent); }
+
+dialog.modal {
+  border: none; border-radius: 12px; padding: 0;
+  box-shadow: 0 10px 40px rgba(30,34,48,.18);
+  width: 100%; max-width: 420px;
+}
+dialog.modal::backdrop { background: rgba(20,23,34,.45); }
+.modal-header {
+  padding: 18px 22px 14px; border-bottom: 1px solid var(--border);
+}
+.modal-header h2 { font-size: 16px; font-weight: 700; }
+.modal-body { padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; }
+.modal-footer {
+  padding: 14px 22px 20px; display: flex; justify-content: flex-end; gap: 10px;
+}
+.modal-field label {
+  display: block; font-size: 12px; font-weight: 600; color: var(--muted);
+  margin-bottom: 5px;
+}
+.modal-field input, .modal-field select {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 8px; font-size: 13.5px; color: var(--text); background: var(--surface);
+}
+.modal-field input:focus, .modal-field select:focus { outline: none; border-color: var(--accent); }
+.modal-error {
+  background: #fee2e2; color: #991b1b; border-radius: 8px;
+  padding: 9px 12px; font-size: 12.5px;
+}
 </style>
 
 <div class="page-header">
@@ -14,7 +42,57 @@
     <h1>Component Catalog</h1>
     <div class="page-subtitle">Reference library of component types</div>
   </div>
+  <button type="button" class="btn btn-primary" onclick="document.getElementById('new-component-modal').showModal()">
+    + New Component
+  </button>
 </div>
+
+<dialog id="new-component-modal" class="modal">
+  <form method="post" action="{% url 'component-list' %}">
+    {% csrf_token %}
+    <div class="modal-header"><h2>New Component</h2></div>
+    <div class="modal-body">
+      {% if form_error %}<div class="modal-error">{{ form_error }}</div>{% endif %}
+      <div class="modal-field">
+        <label for="mc-name">Name *</label>
+        <input type="text" id="mc-name" name="name" value="{{ form_data.name|default:'' }}" required autofocus>
+      </div>
+      <div class="modal-field">
+        <label for="mc-alt">Alternate Name</label>
+        <input type="text" id="mc-alt" name="alternate_name" value="{{ form_data.alternate_name|default:'' }}">
+      </div>
+      <div class="modal-field">
+        <label for="mc-model">Model No.</label>
+        <input type="text" id="mc-model" name="model_number" value="{{ form_data.model_number|default:'' }}">
+      </div>
+      <div class="modal-field">
+        <label for="mc-system">System</label>
+        <select id="mc-system" name="technical_system">
+          <option value="">—</option>
+          {% for sys in systems %}
+            <option value="{{ sys.pk }}" {% if form_data.technical_system == sys.pk %}selected{% endif %}>{{ sys.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost" onclick="document.getElementById('new-component-modal').close()">Cancel</button>
+      <button type="submit" class="btn btn-primary">Create</button>
+    </div>
+  </form>
+</dialog>
+<script>
+  (function () {
+    var dlg = document.getElementById('new-component-modal');
+    // Close when clicking the backdrop (outside the form card).
+    dlg.addEventListener('click', function (e) {
+      if (e.target === dlg) dlg.close();
+    });
+    {% if open_modal %}
+    dlg.showModal();
+    {% endif %}
+  })();
+</script>
 
 <form method="get" class="toolbar">
   <div class="search-wrap">

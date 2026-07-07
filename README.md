@@ -547,3 +547,15 @@ and `DesignClient` return lazy Django QuerySets wherever possible. Callers
 can chain additional filters, annotations, or `values()` calls without
 re-querying the database. Methods that return dicts or lists are explicitly
 documented as such.
+
+## Note for testers/developers
+
+To completely reset the database, use these commands:
+```bash
+# from your project root (where manage.py lives)
+rm -f db.sqlite3
+rm -rf cdb/migrations
+python manage.py makemigrations cdb
+python manage.py migrate
+python manage.py seed_cdb
+```

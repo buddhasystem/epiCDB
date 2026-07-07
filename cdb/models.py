@@ -226,6 +226,11 @@ class TechnicalSystem(models.Model):
     id = models.CharField(max_length=36, primary_key=True, editable=False)
     name        = models.CharField(max_length=64, unique=True)
     description = models.TextField(blank=True)
+    group       = models.ForeignKey(
+        Group, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="technical_systems",
+        help_text="Django auth Group responsible for this technical system.",
+    )
 
     def save(self, *args, **kwargs):
         if not self.id:

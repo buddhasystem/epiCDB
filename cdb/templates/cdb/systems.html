@@ -15,6 +15,7 @@
       <tr>
         <th>System</th>
         <th>Description</th>
+        <th>Group</th>
         <th>Components</th>
         <th>Inventory Items</th>
         <th></th>
@@ -25,6 +26,7 @@
       <tr class="clickable" onclick="location.href='{% url 'system-detail' sys.pk %}'">
         <td><strong>{{ sys.name }}</strong></td>
         <td style="color:var(--muted);font-size:12.5px">{{ sys.description|truncatechars:80 }}</td>
+        <td>{% if sys.group %}<span class="tag gray">{{ sys.group }}</span>{% else %}—{% endif %}</td>
         <td>{{ sys.component_count }}</td>
         <td>
           {% if sys.instance_count %}
@@ -40,7 +42,7 @@
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="5"><div class="empty">No technical systems defined</div></td></tr>
+      <tr><td colspan="6"><div class="empty">No technical systems defined</div></td></tr>
       {% endfor %}
     </tbody>
   </table>

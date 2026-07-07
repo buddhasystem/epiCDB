@@ -92,9 +92,11 @@ class LogEntrySerializer(serializers.ModelSerializer):
 # ── Domain 1: Component Catalog ─────────────────────────────────────────────
 
 class TechnicalSystemSerializer(serializers.ModelSerializer):
+    group_name = serializers.CharField(source="group.name", read_only=True)
+
     class Meta:
         model  = TechnicalSystem
-        fields = ["id", "name", "description"]
+        fields = ["id", "name", "description", "group", "group_name"]
 
 
 class SourceSerializer(serializers.ModelSerializer):
