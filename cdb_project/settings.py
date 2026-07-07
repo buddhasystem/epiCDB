@@ -36,6 +36,17 @@ try:
             'rest_framework.filters.SearchFilter',
             'rest_framework.filters.OrderingFilter',
         ],
+        # The API requires the same Django-auth login as the rest of the
+        # site. SessionAuthentication covers browser/AJAX callers that are
+        # already logged in; BasicAuthentication covers script/CLI callers
+        # that pass a username:password directly.
+        'DEFAULT_AUTHENTICATION_CLASSES': [
+            'rest_framework.authentication.SessionAuthentication',
+            'rest_framework.authentication.BasicAuthentication',
+        ],
+        'DEFAULT_PERMISSION_CLASSES': [
+            'rest_framework.permissions.IsAuthenticated',
+        ],
     }
 except ImportError:
     pass
@@ -97,6 +108,15 @@ LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
+
+
+# Authentication
+# Only users that exist in Django's auth Users table may access the site.
+# Anonymous visitors are sent to the login page (the site's landing page);
+# after a successful login they land on the Dashboard.
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'dashboard'
+LOGOUT_REDIRECT_URL = 'login'
 
 
 # Static files

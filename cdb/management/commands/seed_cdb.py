@@ -28,8 +28,14 @@ class Command(BaseCommand):
         self.stdout.write("Seeding CDB …")
 
         # Users
-        admin, _ = User.objects.get_or_create(username="admin", defaults={"is_staff": True, "is_superuser": True})
-        if not admin.has_usable_password():
+        # Note: a freshly created User has password="", and Django's
+        # has_usable_password() treats an empty string as "usable" (it only
+        # checks for the "!" unusable-password marker) -- so it can't be used
+        # here to detect "needs a password set". Use the get_or_create()
+        # "created" flag instead, so the password is set once on first seed
+        # and never clobbered on subsequent idempotent re-runs.
+        admin, created = User.objects.get_or_create(username="admin", defaults={"is_staff": True, "is_superuser": True})
+        if created:
             admin.set_password("admin"); admin.save()
         srahman, _ = User.objects.get_or_create(username="srahman")
         cpeng,   _ = User.objects.get_or_create(username="cpeng")
@@ -220,4 +226,4 @@ class Command(BaseCommand):
             f"Designs:{Design.objects.count()}  "
             f"Institutions:{Institution.objects.count()}"
         ))
-        
+    
