@@ -31,11 +31,13 @@ Note: all endpoints require djangorestframework to be installed.
 """
 
 try:
-    from django.db.models import Q
-    from rest_framework import generics, filters
+    from django.db.models import ProtectedError
+    from django.shortcuts import get_object_or_404
+    from rest_framework import generics, filters, status
     from rest_framework.decorators import api_view
     from rest_framework.response import Response
     from rest_framework.reverse import reverse
+    from rest_framework.views import APIView
 
     from django.contrib.auth.models import Group
     from .models import (
@@ -209,9 +211,146 @@ try:
                     qs = qs.filter(**{field: val})
             return qs
 
-    class ComponentInstanceDetailView(generics.RetrieveAPIView):
+    class ComponentInstanceDetailView(generics.RetrieveDestroyAPIView):
+        """
+        GET    /api/inventory/<id>/   retrieve a single component instance
+        DELETE /api/inventory/<id>/   delete a single component instance, by id
+        """
         queryset = ComponentInstance.objects.prefetch_related(
             "properties__property_type", "log_entries"
         ).select_related("component", "location", "location__institution",
                          "owner_group", "owner_user")
         serializer_class = ComponentInstanceSerializer
+
+        def destroy(self, request, *args, **kwargs):
+            instance = self.get_object()
+            try:
+                instance.delete()
+            except ProtectedError as exc:
+                blockers = [str(obj) for obj in exc.protected_objects]
+                return Response(
+                    {
+                        "detail": "Cannot delete: this component instance is "
+                                  "still referenced by other records.",
+                        "blocking_objects": blockers,
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # ── Designs ──────────────────────────────────────────────────────────────
+
+    class DesignListView(generics.ListAPIView):
+        serializer_class = DesignListSerializer
+        filter_backends  = [filters.SearchFilter, filters.OrderingFilter]
+        search_fields    = ["name", "description"]
+        ordering_fields  = ["name", "project"]
+
+        def get_queryset(self):
+            qs = Design.objects.select_related("owner_group").all()
+            for param, field in [
+                ("project",     "project__iexact"),
+                ("owner_group", "owner_group__name__iexact"),
+            ]:
+                val = self.request.query_params.get(param)
+                if val:
+                    qs = qs.filter(**{field: val})
+            return qs
+
+    class DesignDetailView(generics.RetrieveAPIView):
+        queryset = Design.objects.prefetch_related(
+            "elements__component", "elements__child_design",
+            "properties__property_type", "log_entries",
+        ).select_related("owner_group", "owner_user")
+        serializer_class = DesignSerializer
+
+    class DesignBOMView(APIView):
+        """
+        GET /api/designs/<id>/bom/
+
+        Flattens the design's Bill-of-Materials by walking DesignElement rows
+        recursively through any nested (child) designs, multiplying
+        quantities along the way, and aggregating by component.
+        """
+
+        def get(self, request, pk):
+            design = get_object_or_404(Design, pk=pk)
+
+            def walk(design_id, multiplier, seen):
+                if design_id in seen:
+                    return []  # guard against circular sub-design references
+                seen = seen | {design_id}
+                rows = []
+                elements = DesignElement.objects.filter(
+                    design_id=design_id
+                ).select_related("component", "child_design")
+                for element in elements:
+                    quantity = element.quantity * multiplier
+                    if element.component_id:
+                        rows.append({
+                            "component":      element.component_id,
+                            "component_name": element.component.name,
+                            "quantity":       quantity,
+                        })
+                    elif element.child_design_id:
+                        rows.extend(walk(element.child_design_id, quantity, seen))
+                return rows
+
+            aggregated = {}
+            for row in walk(design.id, 1, set()):
+                key = row["component"]
+                if key in aggregated:
+                    aggregated[key]["quantity"] += row["quantity"]
+                else:
+                    aggregated[key] = row
+
+            bom = sorted(aggregated.values(), key=lambda r: r["component_name"])
+            return Response({
+                "design":      design.id,
+                "design_name": design.name,
+                "bom":         bom,
+            })
+
+    # ── Property types & logs ────────────────────────────────────────────────
+
+    class PropertyTypeListView(generics.ListAPIView):
+        queryset         = PropertyType.objects.all()
+        serializer_class = PropertyTypeSerializer
+        filter_backends  = [filters.SearchFilter, filters.OrderingFilter]
+        search_fields    = ["name", "description"]
+        ordering_fields  = ["name", "category"]
+
+        def get_queryset(self):
+            qs = PropertyType.objects.all()
+            for param, field in [
+                ("category", "category__iexact"),
+                ("handler",  "handler__iexact"),
+            ]:
+                val = self.request.query_params.get(param)
+                if val:
+                    qs = qs.filter(**{field: val})
+            return qs
+
+    class LogListView(generics.ListAPIView):
+        serializer_class = LogEntrySerializer
+        filter_backends  = [filters.SearchFilter, filters.OrderingFilter]
+        search_fields    = ["entry"]
+        ordering_fields  = ["timestamp", "topic"]
+
+        def get_queryset(self):
+            qs = LogEntry.objects.select_related(
+                "component", "component_instance", "design", "logged_by"
+            ).all()
+            for param, field in [
+                ("topic",     "topic__iexact"),
+                ("component", "component_id"),
+                ("instance",  "component_instance_id"),
+                ("design",    "design_id"),
+            ]:
+                val = self.request.query_params.get(param)
+                if val:
+                    qs = qs.filter(**{field: val})
+            return qs
+
+except ImportError:
+    pass
