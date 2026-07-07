@@ -1,12 +1,21 @@
 """
 Management command: python manage.py seed_cdb
 Populates the CDB with realistic ePIC/BNL sample data.
+
+Kept in sync with the current cdb/models.py schema -- it only touches
+fields and models that actually exist there. In particular:
+  * There is no ComponentFunction model and no Component.function field,
+    so components are described directly via name/description instead.
+  * Django's built-in Group model has no description field, so groups
+    are created by name only.
+  * ComponentInstance has no qr_id field; instances are identified by
+    their human-readable tag (unique per component).
 """
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group
 from django.core.management.base import BaseCommand
 from cdb.models import (
-    Group, Institution, Location, PropertyType,
-    TechnicalSystem, ComponentFunction, Source,
+    Institution, Location, PropertyType,
+    TechnicalSystem, Source,
     Component, ComponentSource, ComponentInstance,
     Design, DesignElement, PropertyValue, LogEntry,
 )
@@ -25,11 +34,10 @@ class Command(BaseCommand):
         srahman, _ = User.objects.get_or_create(username="srahman")
         cpeng,   _ = User.objects.get_or_create(username="cpeng")
 
-        # Groups
+        # Groups (Django's built-in Group model only has a "name" field)
         grp = {}
-        for n, d in [("DIAG","Diagnostics"),("CTL","Controls"),("MED","Magnets"),
-                     ("APSU_VAC","Vacuum"),("EPIC_TRK","ePIC Tracking"),("EPIC_CAL","ePIC Calorimetry")]:
-            g, _ = Group.objects.get_or_create(name=n, defaults={"description": d}); grp[n] = g
+        for n in ["DIAG", "CTL", "MED", "APSU_VAC", "EPIC_TRK", "EPIC_CAL"]:
+            g, _ = Group.objects.get_or_create(name=n); grp[n] = g
 
         # Institutions
         inst = {}
@@ -61,16 +69,10 @@ class Command(BaseCommand):
         fnal_mp9  = mkloc("MP9",                  "building", "FNAL")
         fnal_room = mkloc("Assembly Bay",         "room",     "FNAL", fnal_mp9)
 
-        # Technical systems & functions
+        # Technical systems
         ts = {}
-        for n in ["Tracking","Calorimetry","Vacuum","Controls","Diagnostics"]:
+        for n in ["Tracking", "Calorimetry", "Vacuum", "Controls", "Diagnostics"]:
             o, _ = TechnicalSystem.objects.get_or_create(name=n); ts[n] = o
-
-        cf = {}
-        for n, s in [("Silicon Strip Sensor","Tracking"),("MAPS Pixel Sensor","Tracking"),
-                     ("ASIC Readout Chip","Tracking"),("EMCal Crystal","Calorimetry"),
-                     ("SiPM Photodetector","Calorimetry"),("CPU","Controls"),("Power Supply","Controls")]:
-            o, _ = ComponentFunction.objects.get_or_create(name=n, defaults={"technical_system": ts[s]}); cf[n] = o
 
         # Sources
         src = {}
@@ -102,21 +104,22 @@ class Command(BaseCommand):
         ]:
             o, _ = PropertyType.objects.get_or_create(name=n, defaults={"category": cat, "handler": handler}); pt[n] = o
 
-        # Catalog
-        def mkcomp(name, model, desc, func, sys, grp_name):
+        # Catalog  (Component has no "function" field -- the functional
+        # role is folded into the description instead)
+        def mkcomp(name, model, desc, sys, grp_name):
             c, _ = Component.objects.get_or_create(name=name, project="ePIC", defaults=dict(
                 model_number=model, description=desc,
-                function=cf.get(func), technical_system=ts.get(sys),
+                technical_system=ts.get(sys),
                 owner_group=grp[grp_name], owner_user=admin, created_by=admin))
             return c
 
-        svt  = mkcomp("ePIC SVT Silicon Strip Sensor","HPK-SVT-01","Single-sided AC-coupled strip sensor, pitch 25µm.","Silicon Strip Sensor","Tracking","EPIC_TRK")
-        maps = mkcomp("ePIC ITS3 MAPS Pixel Sensor","ALICE-ITS3-v1","MAPS sensor, 10µm pixel pitch.","MAPS Pixel Sensor","Tracking","EPIC_TRK")
-        asic = mkcomp("EICREADER ASIC","EICRD-23","128-ch 130nm CMOS readout ASIC.","ASIC Readout Chip","Tracking","EPIC_TRK")
-        xtal = mkcomp("PbWO4 EMCal Crystal","CMS-ECAL-W2","23×23×230mm lead tungstate crystal.","EMCal Crystal","Calorimetry","EPIC_CAL")
-        sipm = mkcomp("SiPM S13360-6050PE","S13360-6050PE","6×6mm Hamamatsu SiPM, 50µm pitch.","SiPM Photodetector","Calorimetry","EPIC_CAL")
-        hvm  = mkcomp("CAEN A1511B HV Module","A1511B","16-ch 500V HV module.","Power Supply","Controls","CTL")
-        cpu  = mkcomp("AM31x MicroTCA CPU","AM310/02-52","2nd Gen Intel Core AMC CPU.","CPU","Controls","CTL")
+        svt  = mkcomp("ePIC SVT Silicon Strip Sensor","HPK-SVT-01","Silicon Strip Sensor. Single-sided AC-coupled strip sensor, pitch 25µm.","Tracking","EPIC_TRK")
+        maps = mkcomp("ePIC ITS3 MAPS Pixel Sensor","ALICE-ITS3-v1","MAPS Pixel Sensor. 10µm pixel pitch.","Tracking","EPIC_TRK")
+        asic = mkcomp("EICREADER ASIC","EICRD-23","ASIC Readout Chip. 128-ch 130nm CMOS readout ASIC.","Tracking","EPIC_TRK")
+        xtal = mkcomp("PbWO4 EMCal Crystal","CMS-ECAL-W2","EMCal Crystal. 23×23×230mm lead tungstate crystal.","Calorimetry","EPIC_CAL")
+        sipm = mkcomp("SiPM S13360-6050PE","S13360-6050PE","SiPM Photodetector. 6×6mm Hamamatsu SiPM, 50µm pitch.","Calorimetry","EPIC_CAL")
+        hvm  = mkcomp("CAEN A1511B HV Module","A1511B","Power Supply. 16-ch 500V HV module.","Controls","CTL")
+        cpu  = mkcomp("AM31x MicroTCA CPU","AM310/02-52","CPU. 2nd Gen Intel Core AMC CPU.","Controls","CTL")
 
         for comp, s, pn, cost, role in [
             (svt,  "Hamamatsu Photonics","HPK-SVT-01",320,"manufacturer"),
@@ -140,7 +143,8 @@ class Command(BaseCommand):
         add_prop(component=sipm, ptype="Active Area",  tag="", value="6×6",   units="mm²")
         add_prop(component=cpu,  ptype="Form Factor",  tag="", value="MicroTCA")
 
-        # Instances — spread across BNL, CERN, FNAL
+        # Instances -- spread across BNL, CERN, FNAL. Identified by tag
+        # (unique per component), not by any qr_id field.
         def mkinst(tag, comp, loc, serial="", grp_name="EPIC_TRK"):
             i, _ = ComponentInstance.objects.get_or_create(tag=tag, component=comp, defaults=dict(
                 location=loc, serial_number=serial,
@@ -153,7 +157,7 @@ class Command(BaseCommand):
         i_svt4 = mkinst("SVT-Sensor-004", svt,  fnal_room, "HPK-22-004")   # at FNAL
         i_spm1 = mkinst("SiPM-001",       sipm, room382,   "HAM-23-001","EPIC_CAL")
         i_spm2 = mkinst("SiPM-002",       sipm, cern_lab,  "HAM-23-002","EPIC_CAL")
-        i_cpu1 = mkinst("CPU-001",         cpu,  rack_a1,   "AMC-2013-001","CTL")
+        i_cpu1 = mkinst("CPU-001",        cpu,  rack_a1,   "AMC-2013-001","CTL")
         i_hv1  = mkinst("HV-Mod-001",     hvm,  rack_a1,   "CAEN-22-001", "CTL")
 
         add_prop(component_instance=i_svt1, ptype="QA Level", tag="", value="A")
