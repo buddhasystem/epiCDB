@@ -3,6 +3,7 @@ CDB web views — server-rendered Django pages.
 URL config: cdb/urls_web.py
 """
 from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User, Group
 from django.db.models import Q, Count
 from django.core.paginator import Paginator
@@ -28,6 +29,7 @@ def _qs(request, *exclude):
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
+@login_required
 def dashboard(request):
     context = {
         'component_count':   Component.objects.count(),
@@ -44,13 +46,14 @@ def dashboard(request):
 
 # ── Component Catalog ─────────────────────────────────────────────────────────
 
+@login_required
 def component_list(request):
     q      = request.GET.get('q', '')
     system = request.GET.get('system', '')
 
     qs = Component.objects.select_related(
         'technical_system', 'owner_group',
-    ).annotate(instance_count=Count('instances'))
+    ).annotate(instance_count=Count('instances')).order_by('name')
 
     if q:
         qs = qs.filter(
@@ -74,6 +77,7 @@ def component_list(request):
     return render(request, 'cdb/components.html', context)
 
 
+@login_required
 def component_detail(request, pk):
     comp = get_object_or_404(
         Component.objects.prefetch_related(
@@ -90,6 +94,7 @@ def component_detail(request, pk):
 
 # ── Component Inventory ───────────────────────────────────────────────────────
 
+@login_required
 def inventory_list(request):
     q           = request.GET.get('q', '')
     institution = request.GET.get('institution', '')
@@ -155,6 +160,7 @@ def inventory_list(request):
     return render(request, 'cdb/inventory.html', context)
 
 
+@login_required
 def inventory_detail(request, pk):
     instance = get_object_or_404(
         ComponentInstance.objects.prefetch_related(
@@ -172,12 +178,13 @@ def inventory_detail(request, pk):
 
 # ── Designs ───────────────────────────────────────────────────────────────────
 
+@login_required
 def design_list(request):
     q = request.GET.get('q', '')
 
     qs = Design.objects.select_related('owner_group').annotate(
         element_count=Count('elements')
-    )
+    ).order_by('name')
     if q:
         qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
 
@@ -193,6 +200,7 @@ def design_list(request):
     return render(request, 'cdb/designs.html', context)
 
 
+@login_required
 def design_detail(request, pk):
     design = get_object_or_404(
         Design.objects.prefetch_related(
@@ -227,6 +235,7 @@ def _build_bom(design, depth=0, max_depth=10):
 
 # ── Technical Systems ─────────────────────────────────────────────────────────
 
+@login_required
 def system_list(request):
     """List all technical systems with component and instance counts."""
     systems = TechnicalSystem.objects.annotate(
@@ -237,6 +246,7 @@ def system_list(request):
     return render(request, 'cdb/systems.html', context)
 
 
+@login_required
 def system_detail(request, pk):
     """Show a single technical system with its inventory items, filterable."""
     system = get_object_or_404(TechnicalSystem, pk=pk)
@@ -279,6 +289,7 @@ def system_detail(request, pk):
 
 # ── Institutions & Locations ──────────────────────────────────────────────────
 
+@login_required
 def institution_list(request):
     institutions = Institution.objects.prefetch_related(
         'locations',
@@ -288,6 +299,7 @@ def institution_list(request):
     return render(request, 'cdb/institutions.html', context)
 
 
+@login_required
 def user_inventory(request, username):
     user = get_object_or_404(User, username=username)
     instances = ComponentInstance.objects.filter(
@@ -306,6 +318,7 @@ def user_inventory(request, username):
     return render(request, 'cdb/user_inventory.html', context)
 
 
+@login_required
 def location_inventory(request, pk):
     location = get_object_or_404(
         Location.objects.select_related('institution', 'parent'),
@@ -327,6 +340,7 @@ def location_inventory(request, pk):
 
 # ── Activity Log ──────────────────────────────────────────────────────────────
 
+@login_required
 def log_list(request):
     q     = request.GET.get('q', '')
     topic = request.GET.get('topic', '')
