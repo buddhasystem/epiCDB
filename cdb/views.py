@@ -100,6 +100,19 @@ try:
 
     # ── Locations ─────────────────────────────────────────────────────────────
 
+    def _descendants(location_id, include_self=True):
+        """Ids of a location plus every location nested beneath it (recursively)."""
+        ids   = [location_id] if include_self else []
+        stack = [location_id]
+        while stack:
+            current  = stack.pop()
+            children = list(
+                Location.objects.filter(parent_id=current).values_list("id", flat=True)
+            )
+            ids.extend(children)
+            stack.extend(children)
+        return ids
+
     class LocationListView(generics.ListAPIView):
         serializer_class = LocationListSerializer
         filter_backends  = [filters.SearchFilter, filters.OrderingFilter]
