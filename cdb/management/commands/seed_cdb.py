@@ -19,6 +19,7 @@ from django.contrib.auth.models import User, Group
 from django.core.management.base import BaseCommand
 from cdb.models import (
     Institution, Location, TechnicalSystem, Component, ComponentInstance,
+    UserProfile,
 )
 
 
@@ -41,22 +42,34 @@ class Command(BaseCommand):
         # here to detect "needs a password set". Use the get_or_create()
         # "created" flag instead, so the password is set once on first seed
         # and never clobbered on subsequent idempotent re-runs.
-        def mkuser(username, is_staff=False, is_superuser=False, groups=()):
+        def mkuser(username, is_staff=False, is_superuser=False, groups=(),
+                   first_name="", last_name="", email=""):
             u, created = User.objects.get_or_create(
                 username=username,
                 defaults={"is_staff": is_staff, "is_superuser": is_superuser},
             )
             if created:
                 u.set_password(username)
-                u.save()
+            # first/last name and email are safe to keep in sync on every
+            # run (unlike the password, they're not secret and there's no
+            # harm in re-applying the seed's intended values).
+            u.first_name = first_name
+            u.last_name  = last_name
+            u.email      = email
+            u.save()
             if groups:
                 u.groups.set([grp[g] for g in groups])
             return u
 
         mkuser("admin", is_staff=True, is_superuser=True)
-        mkuser("maxim", is_staff=True, is_superuser=True)
-        gnigmat = mkuser("gnigmat", groups=["BTOF"])
-        crafts  = mkuser("crafts",  groups=["BEMC"])
+        mkuser("maxim", is_staff=True, is_superuser=True,
+               first_name="Maxim", email="buddhasystem@gmail.com")
+        gnigmat = mkuser("gnigmat", groups=["BTOF"],
+                          first_name="Grigory", last_name="Nigmatkulov",
+                          email="gnigmat@uic.edu")
+        crafts  = mkuser("crafts",  groups=["BEMC"],
+                          first_name="Casey", last_name="Crafts",
+                          email="crafts@cua.edu")
 
         # Technical systems, each owned by a responsible group
         ts = {}
@@ -89,6 +102,10 @@ class Command(BaseCommand):
         test_lab, _ = Location.objects.get_or_create(
             name="Test Lab", location_type="room", institution=uic,
         )
+
+        # Link each user to their home institution.
+        for user, inst in [(crafts, cua), (gnigmat, uic)]:
+            UserProfile.objects.get_or_create(user=user, defaults={"institution": inst})
 
         # Components  (Component has no "function" field -- the functional
         # role is folded into the description instead)

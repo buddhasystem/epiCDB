@@ -408,6 +408,18 @@ def system_detail(request, pk):
     return render(request, 'cdb/inventory.html', context)
 
 
+# ── Users ─────────────────────────────────────────────────────────────────────
+
+@login_required
+def user_list(request):
+    """List all site users (excluding the built-in "admin" account) with
+    their name, home institution, and email."""
+    users = User.objects.exclude(username='admin').select_related(
+        'profile__institution',
+    ).order_by('first_name', 'last_name', 'username')
+    context = {'users': users, 'active_page': 'users'}
+    return render(request, 'cdb/users.html', context)
+
 
 # ── Institutions & Locations ──────────────────────────────────────────────────
 
