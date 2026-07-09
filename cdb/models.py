@@ -92,27 +92,26 @@ class PropertyType(models.Model):
     id = models.CharField(max_length=36, primary_key=True, editable=False)
     HANDLER_CHOICES = [
         ("",                  "None"),
-        ("pdmlink",           "PDMLink"),
-        ("component_design",  "Component Design"),
-        ("traveler_template", "Traveler Template"),
-        ("traveler_instance", "Traveler Instance"),
         ("document",          "Document"),
         ("image",             "Image"),
         ("http_link",         "HTTP Link"),
-        ("currency",          "Currency"),
-        ("boolean",           "Boolean"),
-        ("date",              "Date"),
+        # ("traveler_template", "Traveler Template"),
+        # ("traveler_instance", "Traveler Instance"),
+
+        # ("currency",          "Currency"),
+        # ("boolean",           "Boolean"),
+        #("date",              "Date"),
     ]
     CATEGORY_CHOICES = [
-        ("physical",       "Physical"),
-        ("documentation",  "Documentation"),
-        ("qa",             "QA"),
-        ("lattice",        "Lattice"),
-        ("safety",         "Safety"),
-        ("maintenance",    "Maintenance"),
-        ("design",         "Design"),
-        ("status",         "Status"),
-        ("other",          "Other"),
+        ("physical",        "Physical"),
+        ("documentation",   "Documentation"),
+        # ("qa",            "QA"),
+        # ("maintenance",    "Maintenance"),
+        # ("design",         "Design"),
+        # ("status",         "Status"),
+        # ("other",          "Other"),
+        # ("lattice",        "Lattice"),
+        #("safety",         "Safety"),
     ]
     name          = models.CharField(max_length=128, unique=True)
     category      = models.CharField(max_length=32, choices=CATEGORY_CHOICES, default="other")
