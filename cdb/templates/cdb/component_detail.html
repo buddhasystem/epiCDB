@@ -73,16 +73,26 @@
 
     <!-- Inventory instances -->
     <div class="card">
-      <h2>Inventory Instances ({{ component.instances.count }})</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+        <h2 style="margin:0">Inventory Instances ({{ component.instances.count }})</h2>
+        {% if sites %}
+        <select id="site-filter" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;background:var(--surface);color:var(--text)">
+          <option value="">All Sites</option>
+          {% for site in sites %}
+          <option value="{{ site }}">{{ site }}</option>
+          {% endfor %}
+        </select>
+        {% endif %}
+      </div>
       {% if component.instances.all %}
       <div class="table-wrap" style="margin:0">
         <table>
           <thead>
             <tr><th>Tag</th><th>Location</th></tr>
           </thead>
-          <tbody>
+          <tbody id="inventory-instances-body">
             {% for inst in component.instances.all %}
-            <tr class="clickable" onclick="location.href='{% url 'inventory-detail' inst.pk %}'">
+            <tr class="clickable" data-site="{{ inst.location.institution|default:'' }}" onclick="location.href='{% url 'inventory-detail' inst.pk %}'">
               <td>{{ inst.tag|default:"—" }}</td>
               <td style="font-size:12.5px">{{ inst.location|default:"—" }}</td>
             </tr>
@@ -90,6 +100,7 @@
           </tbody>
         </table>
       </div>
+      <div id="no-site-instances" class="empty" style="padding:12px 0;display:none">No instances at this site</div>
       {% else %}
       <div class="empty" style="padding:12px 0">No instances in inventory</div>
       {% endif %}
@@ -137,4 +148,23 @@
     </div>
   </div>
 </div>
+
+<script>
+(function () {
+  var sel = document.getElementById('site-filter');
+  if (!sel) return;
+  sel.addEventListener('change', function () {
+    var val = sel.value;
+    var rows = document.querySelectorAll('#inventory-instances-body tr');
+    var visible = 0;
+    rows.forEach(function (row) {
+      var show = !val || row.dataset.site === val;
+      row.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    var empty = document.getElementById('no-site-instances');
+    if (empty) empty.style.display = visible ? 'none' : '';
+  });
+})();
+</script>
 {% endblock %}

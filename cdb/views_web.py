@@ -127,7 +127,14 @@ def component_detail(request, pk):
         ).select_related('technical_system', 'owner_group', 'owner_user'),
         pk=pk,
     )
-    context = {'component': comp, 'active_page': 'components'}
+    # Distinct sites (institutions) among this component's instances, for the
+    # site filter dropdown on the Inventory Instances panel.
+    sites = sorted(
+        {inst.location.institution for inst in comp.instances.all()
+         if inst.location and inst.location.institution},
+        key=str,
+    )
+    context = {'component': comp, 'active_page': 'components', 'sites': sites}
     return render(request, 'cdb/component_detail.html', context)
 
 
