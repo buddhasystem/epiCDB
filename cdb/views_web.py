@@ -198,6 +198,24 @@ def component_property_delete(request, pk, property_id):
     return redirect('component-detail', pk=comp.pk)
 
 
+@login_required
+def component_property_update(request, pk, property_id):
+    """Inline-edit a component property's value/units from the Properties
+    panel. property_id is scoped to component=pk, same protection as
+    component_property_delete. Document/Image property types (and any
+    property that happens to have a file attached) are excluded -- their
+    content is managed via file upload in the Add Property modal, not a
+    plain text field, so an edit attempt on one of those is silently
+    ignored rather than honoured."""
+    comp = get_object_or_404(Component, pk=pk)
+    pv = get_object_or_404(PropertyValue, pk=property_id, component=comp)
+    if request.method == 'POST' and pv.property_type.handler not in ('document', 'image') and not pv.file:
+        pv.value = request.POST.get('value', '').strip()
+        pv.units = request.POST.get('units', '').strip()
+        pv.save()
+    return redirect('component-detail', pk=comp.pk)
+
+
 # ── Component Inventory ───────────────────────────────────────────────────────
 
 @login_required
@@ -320,6 +338,49 @@ def inventory_list(request):
         'open_modal':      bool(form_error),
     }
     return render(request, 'cdb/inventory.html', context)
+
+
+@login_required
+def inventory_property_update(request, pk, property_id):
+    """Inline-edit a property's value/units from the instance detail page.
+    property_id may refer to either an instance-owned PropertyValue or one
+    inherited from the instance's Component (as returned by
+    effective_properties()) -- scoped to one or the other so an unrelated
+    property can't be targeted by guessing an id.
+
+    Editing an instance-owned row updates it in place. Editing an inherited
+    row does NOT mutate the shared component-level default (that would
+    silently change the value for every other instance); instead it
+    creates (or updates) this instance's own override for the same
+    (property_type, tag) pair -- the same effect as using the "Add /
+    Override" form with a matching Property Type and Tag.
+
+    Document/Image property types (and any property that happens to have a
+    file attached) are excluded, same as the component-level version of
+    this feature."""
+    instance = get_object_or_404(ComponentInstance, pk=pk)
+    pv = get_object_or_404(
+        PropertyValue,
+        Q(component_instance=instance) | Q(component_id=instance.component_id),
+        pk=property_id,
+    )
+    if request.method == 'POST' and pv.property_type.handler not in ('document', 'image') and not pv.file:
+        value = request.POST.get('value', '').strip()
+        units = request.POST.get('units', '').strip()
+        if pv.component_instance_id == instance.pk:
+            pv.value = value
+            pv.units = units
+            pv.save()
+        else:
+            override, created = PropertyValue.objects.get_or_create(
+                component_instance=instance, property_type_id=pv.property_type_id, tag=pv.tag,
+                defaults={'value': value, 'units': units},
+            )
+            if not created:
+                override.value = value
+                override.units = units
+                override.save()
+    return redirect('inventory-detail', pk=instance.pk)
 
 
 @login_required

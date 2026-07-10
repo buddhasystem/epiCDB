@@ -173,6 +173,18 @@ class Command(BaseCommand):
         datasheet_pt, _ = PropertyType.objects.get_or_create(
             name="Datasheet", defaults={"category": "documentation", "handler": "document"},
         )
+        timing_constant_pt, _ = PropertyType.objects.get_or_create(
+            name="Timing Constant", defaults={"category": "physical", "default_units": "ps"},
+        )
+        length_pt, _ = PropertyType.objects.get_or_create(
+            name="Length", defaults={"category": "physical", "default_units": "cm"},
+        )
+        width_pt, _ = PropertyType.objects.get_or_create(
+            name="Width", defaults={"category": "physical", "default_units": "cm"},
+        )
+        height_pt, _ = PropertyType.objects.get_or_create(
+            name="Height", defaults={"category": "physical", "default_units": "cm"},
+        )
 
         # Component-level defaults: every instance of the crystal inherits
         # these unless it overrides the same (property_type, tag) pair.
@@ -183,6 +195,18 @@ class Command(BaseCommand):
         PropertyValue.objects.get_or_create(
             component=crystal, property_type=datasheet_pt, tag="",
             defaults={"value": "https://example.org/pwo-crystal-datasheet.pdf"},
+        )
+        PropertyValue.objects.get_or_create(
+            component=crystal, property_type=length_pt, tag="",
+            defaults={"value": "20", "units": "cm"},
+        )
+        PropertyValue.objects.get_or_create(
+            component=crystal, property_type=width_pt, tag="",
+            defaults={"value": "2", "units": "cm"},
+        )
+        PropertyValue.objects.get_or_create(
+            component=crystal, property_type=height_pt, tag="",
+            defaults={"value": "2", "units": "cm"},
         )
 
         # One instance overrides the inherited Weight -- this particular
