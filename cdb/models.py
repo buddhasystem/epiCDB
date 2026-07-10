@@ -92,26 +92,27 @@ class PropertyType(models.Model):
     id = models.CharField(max_length=36, primary_key=True, editable=False)
     HANDLER_CHOICES = [
         ("",                  "None"),
+        ("pdmlink",           "PDMLink"),
+        ("component_design",  "Component Design"),
+        ("traveler_template", "Traveler Template"),
+        ("traveler_instance", "Traveler Instance"),
         ("document",          "Document"),
         ("image",             "Image"),
         ("http_link",         "HTTP Link"),
-        # ("traveler_template", "Traveler Template"),
-        # ("traveler_instance", "Traveler Instance"),
-
-        # ("currency",          "Currency"),
-        # ("boolean",           "Boolean"),
-        #("date",              "Date"),
+        ("currency",          "Currency"),
+        ("boolean",           "Boolean"),
+        ("date",              "Date"),
     ]
     CATEGORY_CHOICES = [
-        ("physical",        "Physical"),
-        ("documentation",   "Documentation"),
-        # ("qa",            "QA"),
-        # ("maintenance",    "Maintenance"),
-        # ("design",         "Design"),
-        # ("status",         "Status"),
-        # ("other",          "Other"),
-        # ("lattice",        "Lattice"),
-        #("safety",         "Safety"),
+        ("physical",       "Physical"),
+        ("documentation",  "Documentation"),
+        ("qa",             "QA"),
+        ("lattice",        "Lattice"),
+        ("safety",         "Safety"),
+        ("maintenance",    "Maintenance"),
+        ("design",         "Design"),
+        ("status",         "Status"),
+        ("other",          "Other"),
     ]
     name          = models.CharField(max_length=128, unique=True)
     category      = models.CharField(max_length=32, choices=CATEGORY_CHOICES, default="other")
@@ -158,6 +159,10 @@ class PropertyValue(models.Model):
     property_type = models.ForeignKey(PropertyType, on_delete=models.CASCADE)
     tag           = models.CharField(max_length=128, blank=True)
     value         = models.TextField(blank=True)
+    # For handler="document"/"image" property types: an actual uploaded file.
+    # value is still used as a fallback for a plain pasted URL (e.g. a link
+    # to an externally-hosted datasheet) when no file is attached.
+    file          = models.FileField(upload_to="property_files/", null=True, blank=True)
     units         = models.CharField(max_length=64,  blank=True)
     description   = models.TextField(blank=True)
     is_dynamic    = models.BooleanField(default=False)
@@ -331,6 +336,26 @@ class ComponentInstance(OwnedModel):
         if self.technical_system_id is None and self.component_id:
             self.technical_system = self.component.technical_system
         super().save(*args, **kwargs)
+
+    def effective_properties(self):
+        """Properties as they should be displayed/used for this instance:
+        the instance's own PropertyValue rows, plus its Component's rows for
+        any (property_type, tag) pair the instance hasn't overridden.
+
+        Matching on (property_type, tag) -- not property_type alone -- because
+        a single object can legitimately hold more than one PropertyValue of
+        the same type (e.g. two "Document" properties tagged "Datasheet" and
+        "Photo"); overriding one shouldn't hide the other. Rows with
+        component_instance_id == None in the result are inherited defaults;
+        rows with it set are the instance's own (added or overriding).
+        """
+        own = list(self.properties.select_related('property_type').all())
+        overridden = {(pv.property_type_id, pv.tag) for pv in own}
+        inherited = [
+            pv for pv in self.component.properties.select_related('property_type').all()
+            if (pv.property_type_id, pv.tag) not in overridden
+        ]
+        return sorted(inherited + own, key=lambda pv: (pv.property_type.name, pv.tag))
 
     def __str__(self):
         label = self.tag or str(self.pk)[:8]

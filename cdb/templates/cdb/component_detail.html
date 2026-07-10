@@ -2,6 +2,41 @@
 {% block title %}{{ component.name }} — ePIC CDB{% endblock %}
 
 {% block content %}
+<style>
+dialog.modal {
+  border: none; border-radius: 12px; padding: 0;
+  box-shadow: 0 10px 40px rgba(30,34,48,.18);
+  width: 100%; max-width: 420px;
+}
+dialog.modal::backdrop { background: rgba(20,23,34,.45); }
+.modal-header {
+  padding: 18px 22px 14px; border-bottom: 1px solid var(--border);
+}
+.modal-header h2 { font-size: 16px; font-weight: 700; }
+.modal-body { padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; }
+.modal-footer {
+  padding: 14px 22px 20px; display: flex; justify-content: flex-end; gap: 10px;
+}
+.modal-field label {
+  display: block; font-size: 12px; font-weight: 600; color: var(--muted);
+  margin-bottom: 5px;
+}
+.modal-field input, .modal-field select {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 8px; font-size: 13.5px; color: var(--text); background: var(--surface);
+}
+.modal-field input:focus, .modal-field select:focus { outline: none; border-color: var(--accent); }
+.modal-error {
+  background: #fee2e2; color: #991b1b; border-radius: 8px;
+  padding: 9px 12px; font-size: 12.5px;
+}
+.prop-value { min-width: 0; }
+.prop-link-trunc {
+  display: inline-block; max-width: 220px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom;
+}
+</style>
+
 <a href="{% url 'component-list' %}" class="detail-back">
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
   Back to Components
@@ -111,13 +146,33 @@
   <div>
     <!-- Properties -->
     <div class="card">
-      <h2>Properties</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+        <h2 style="margin:0">Properties</h2>
+        <button type="button" class="btn btn-ghost" style="font-size:12.5px;padding:5px 10px" onclick="document.getElementById('add-property-modal').showModal()">
+          + Add Property
+        </button>
+      </div>
       {% if component.properties.all %}
       <div class="prop-list">
         {% for pv in component.properties.all %}
         <div class="prop-row">
-          <span class="prop-name">{{ pv.property_type }}</span>
-          <span class="prop-value">{{ pv.value }}{% if pv.units %} <span style="color:var(--muted);font-size:11px">{{ pv.units }}</span>{% endif %}</span>
+          <span class="prop-name">{{ pv.property_type }}{% if pv.tag %} <span style="color:var(--muted);font-size:11px">({{ pv.tag }})</span>{% endif %}</span>
+          <span class="prop-value" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            {% if pv.file %}
+              {% if pv.property_type.handler == 'image' %}
+                <a href="{{ pv.file.url }}" target="_blank" rel="noopener"><img src="{{ pv.file.url }}" style="max-height:60px;max-width:120px;border-radius:6px;display:block"></a>
+              {% else %}
+                <a href="{{ pv.file.url }}" target="_blank" rel="noopener" class="prop-link-trunc" title="{{ pv.file.name|cut:'property_files/' }}">📎 {{ pv.file.name|cut:"property_files/" }}</a>
+              {% endif %}
+            {% elif pv.value %}
+              {% if pv.property_type.handler == 'http_link' or pv.property_type.handler == 'document' or pv.property_type.handler == 'image' %}
+                <a href="{{ pv.value }}" target="_blank" rel="noopener" class="prop-link-trunc" title="{{ pv.value }}">{{ pv.value }}</a>
+              {% else %}
+                {{ pv.value }}
+              {% endif %}
+            {% endif %}
+            {% if pv.units %}<span style="color:var(--muted);font-size:11px">{{ pv.units }}</span>{% endif %}
+          </span>
         </div>
         {% endfor %}
       </div>
@@ -148,6 +203,57 @@
     </div>
   </div>
 </div>
+
+<dialog id="add-property-modal" class="modal">
+  <form method="post" action="{% url 'component-detail' component.pk %}" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="modal-header"><h2>Add Property</h2></div>
+    <div class="modal-body">
+      {% if form_error %}<div class="modal-error">{{ form_error }}</div>{% endif %}
+      <div class="modal-field">
+        <label for="pv-type">Property Type *</label>
+        <select id="pv-type" name="property_type" required>
+          <option value="">—</option>
+          {% for pt in property_types %}
+          <option value="{{ pt.pk }}" {% if form_data.property_type == pt.pk %}selected{% endif %}>{{ pt.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="modal-field">
+        <label for="pv-tag">Tag</label>
+        <input type="text" id="pv-tag" name="tag" value="{{ form_data.tag|default:'' }}" placeholder="optional label, e.g. Datasheet">
+      </div>
+      <div class="modal-field">
+        <label for="pv-value">Value</label>
+        <input type="text" id="pv-value" name="value" value="{{ form_data.value|default:'' }}" placeholder="text value, or a URL if not uploading a file">
+      </div>
+      <div class="modal-field">
+        <label for="pv-units">Units</label>
+        <input type="text" id="pv-units" name="units" value="{{ form_data.units|default:'' }}">
+      </div>
+      <div class="modal-field">
+        <label for="pv-file">File</label>
+        <input type="file" id="pv-file" name="file">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">For Document/Image property types — attach a file instead of (or in addition to) a value.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost" onclick="document.getElementById('add-property-modal').close()">Cancel</button>
+      <button type="submit" class="btn btn-primary">Add</button>
+    </div>
+  </form>
+</dialog>
+<script>
+(function () {
+  var dlg = document.getElementById('add-property-modal');
+  dlg.addEventListener('click', function (e) {
+    if (e.target === dlg) dlg.close();
+  });
+  {% if open_modal %}
+  dlg.showModal();
+  {% endif %}
+})();
+</script>
 
 <script>
 (function () {

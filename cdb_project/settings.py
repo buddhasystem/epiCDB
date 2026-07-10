@@ -122,3 +122,9 @@ LOGOUT_REDIRECT_URL = 'login'
 # Static files
 
 STATIC_URL = 'static/'
+
+
+# Media (user-uploaded files: log attachments, property documents/images)
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = '/var/data/cdb/media'

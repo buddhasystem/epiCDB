@@ -19,7 +19,7 @@ from django.contrib.auth.models import User, Group
 from django.core.management.base import BaseCommand
 from cdb.models import (
     Institution, Location, TechnicalSystem, Component, ComponentInstance,
-    UserProfile,
+    UserProfile, PropertyType, PropertyValue,
 )
 
 
@@ -146,9 +146,12 @@ class Command(BaseCommand):
                 owner_group=grp[group_name], owner_user=owner, created_by=owner))
             return i
 
+        crystal_instances = []
         for i in range(1, 4):  # 3 instances
             loc = storage_room if i % 2 else test_lab
-            mkinst(f"BEMC-CRYSTAL-{i:03d}", crystal, loc, crafts, "BEMC", f"PWO-{i:04d}")
+            crystal_instances.append(
+                mkinst(f"BEMC-CRYSTAL-{i:03d}", crystal, loc, crafts, "BEMC", f"PWO-{i:04d}")
+            )
 
         for i in range(1, 5):  # 4 instances
             loc = storage_room if i % 2 else test_lab
@@ -161,6 +164,34 @@ class Command(BaseCommand):
         for i in range(1, 6):  # 5 instances
             loc = test_lab if i % 2 else storage_room
             mkinst(f"BTOF-READOUT-{i:03d}", readout, loc, gnigmat, "BTOF", f"FCFD-{i:04d}")
+
+        # Property types + a couple of example values, to demonstrate
+        # component -> instance property inheritance (and overriding).
+        weight_pt, _ = PropertyType.objects.get_or_create(
+            name="Weight", defaults={"category": "physical", "default_units": "kg"},
+        )
+        datasheet_pt, _ = PropertyType.objects.get_or_create(
+            name="Datasheet", defaults={"category": "documentation", "handler": "document"},
+        )
+
+        # Component-level defaults: every instance of the crystal inherits
+        # these unless it overrides the same (property_type, tag) pair.
+        PropertyValue.objects.get_or_create(
+            component=crystal, property_type=weight_pt, tag="",
+            defaults={"value": "0.45", "units": "kg"},
+        )
+        PropertyValue.objects.get_or_create(
+            component=crystal, property_type=datasheet_pt, tag="",
+            defaults={"value": "https://example.org/pwo-crystal-datasheet.pdf"},
+        )
+
+        # One instance overrides the inherited Weight -- this particular
+        # crystal was measured slightly lighter than the catalog default.
+        if crystal_instances:
+            PropertyValue.objects.get_or_create(
+                component_instance=crystal_instances[0], property_type=weight_pt, tag="",
+                defaults={"value": "0.44", "units": "kg"},
+            )
 
         self.stdout.write(self.style.SUCCESS(
             f"\nDone.  admin/admin, maxim/maxim | "

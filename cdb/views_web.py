@@ -11,7 +11,7 @@ from django.core.paginator import Paginator
 
 from .models import (
     Component, ComponentInstance, Design, DesignElement,
-    Institution, Location, LogEntry, TechnicalSystem,
+    Institution, Location, LogEntry, TechnicalSystem, PropertyType, PropertyValue,
 )
 
 
@@ -118,6 +118,10 @@ def component_list(request):
 
 @login_required
 def component_detail(request, pk):
+    """Component detail page. Also handles the "Add Property" pop-up form:
+    a POST here (property_type, tag, value, units) creates a component-level
+    PropertyValue, which is then inherited by every ComponentInstance of this
+    component that doesn't already override that (property_type, tag) pair."""
     comp = get_object_or_404(
         Component.objects.prefetch_related(
             'componentsource_set__source',
@@ -127,6 +131,37 @@ def component_detail(request, pk):
         ).select_related('technical_system', 'owner_group', 'owner_user'),
         pk=pk,
     )
+
+    form_error = None
+    form_data  = {}
+
+    if request.method == 'POST':
+        property_type_id = request.POST.get('property_type') or None
+        tag               = request.POST.get('tag', '').strip()
+        value             = request.POST.get('value', '').strip()
+        units             = request.POST.get('units', '').strip()
+        uploaded_file     = request.FILES.get('file')
+        form_data = {'property_type': property_type_id or '', 'tag': tag, 'value': value, 'units': units}
+
+        if not property_type_id:
+            form_error = 'Property Type is required.'
+        else:
+            # (component, property_type, tag) identifies "the same property".
+            # Re-submitting the same combination (e.g. re-uploading a
+            # replacement datasheet) should update that one row in place,
+            # not create a second row that duplicates it in the panel.
+            pv, created = PropertyValue.objects.get_or_create(
+                component=comp, property_type_id=property_type_id, tag=tag,
+                defaults={'value': value, 'units': units, 'file': uploaded_file},
+            )
+            if not created:
+                pv.value = value
+                pv.units = units
+                if uploaded_file:
+                    pv.file = uploaded_file
+                pv.save()
+            return redirect('component-detail', pk=comp.pk)
+
     # Distinct sites (institutions) among this component's instances, for the
     # site filter dropdown on the Inventory Instances panel.
     sites = sorted(
@@ -134,7 +169,15 @@ def component_detail(request, pk):
          if inst.location and inst.location.institution},
         key=str,
     )
-    context = {'component': comp, 'active_page': 'components', 'sites': sites}
+    context = {
+        'component':      comp,
+        'active_page':    'components',
+        'sites':          sites,
+        'property_types': PropertyType.objects.order_by('name'),
+        'form_error':      form_error,
+        'form_data':       form_data,
+        'open_modal':      bool(form_error),
+    }
     return render(request, 'cdb/component_detail.html', context)
 
 
@@ -264,6 +307,12 @@ def inventory_list(request):
 
 @login_required
 def inventory_detail(request, pk):
+    """Instance detail page. Also handles the "Add / Override Property"
+    pop-up form: a POST here (property_type, tag, value, units) creates an
+    instance-level PropertyValue. If its (property_type, tag) matches one
+    inherited from the component, it overrides (hides) that default; if not,
+    it's simply an additional property on this instance alone. See
+    ComponentInstance.effective_properties()."""
     instance = get_object_or_404(
         ComponentInstance.objects.prefetch_related(
             'properties__property_type',
@@ -274,7 +323,44 @@ def inventory_detail(request, pk):
         ),
         pk=pk,
     )
-    context = {'instance': instance, 'active_page': 'inventory'}
+
+    form_error = None
+    form_data  = {}
+
+    if request.method == 'POST':
+        property_type_id = request.POST.get('property_type') or None
+        tag               = request.POST.get('tag', '').strip()
+        value             = request.POST.get('value', '').strip()
+        units             = request.POST.get('units', '').strip()
+        uploaded_file     = request.FILES.get('file')
+        form_data = {'property_type': property_type_id or '', 'tag': tag, 'value': value, 'units': units}
+
+        if not property_type_id:
+            form_error = 'Property Type is required.'
+        else:
+            # Same reasoning as component_detail: (component_instance,
+            # property_type, tag) identifies "the same property" -- update
+            # it in place on resubmission instead of creating a duplicate.
+            pv, created = PropertyValue.objects.get_or_create(
+                component_instance=instance, property_type_id=property_type_id, tag=tag,
+                defaults={'value': value, 'units': units, 'file': uploaded_file},
+            )
+            if not created:
+                pv.value = value
+                pv.units = units
+                if uploaded_file:
+                    pv.file = uploaded_file
+                pv.save()
+            return redirect('inventory-detail', pk=instance.pk)
+
+    context = {
+        'instance':        instance,
+        'active_page':     'inventory',
+        'property_types':  PropertyType.objects.order_by('name'),
+        'form_error':      form_error,
+        'form_data':       form_data,
+        'open_modal':      bool(form_error),
+    }
     return render(request, 'cdb/inventory_detail.html', context)
 
 

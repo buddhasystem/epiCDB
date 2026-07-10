@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
 
@@ -33,3 +35,9 @@ try:
     ]
 except ImportError:
     pass
+
+# Serve user-uploaded files (log attachments, property documents/images) in
+# development. In production this should be handled by the web server / a
+# proper storage backend instead.
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
