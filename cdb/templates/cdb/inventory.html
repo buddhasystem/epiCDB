@@ -119,12 +119,10 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     <input type="text" name="q" value="{{ q }}" placeholder="Search by tag, serial number, component…">
   </div>
-  <select name="institution" class="filter-select">
-    <option value="">All Institutions</option>
-    {% for inst in institutions %}
-      <option value="{{ inst.abbreviation }}" {% if institution == inst.abbreviation %}selected{% endif %}>
-        {{ inst.abbreviation }} — {{ inst.name }}
-      </option>
+  <select name="location" class="filter-select">
+    <option value="">All Locations</option>
+    {% for loc in locations %}
+      <option value="{{ loc.pk }}" {% if location == loc.pk %}selected{% endif %}>{{ loc.full_path }}</option>
     {% endfor %}
   </select>
   <select name="system" class="filter-select">
@@ -146,7 +144,7 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
     {% endfor %}
   </select>
   <button type="submit" class="btn btn-primary">Search</button>
-  {% if q or institution or system or group or owner %}<a href="{% url 'inventory-list' %}" class="btn btn-ghost">Clear</a>{% endif %}
+  {% if q or location or system or group or owner %}<a href="{% url 'inventory-list' %}" class="btn btn-ghost">Clear</a>{% endif %}
 </form>
 
 {% comment %}Sortable header macro via with blocks{% endcomment %}

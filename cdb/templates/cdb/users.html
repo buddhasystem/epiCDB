@@ -55,6 +55,7 @@
           </a>
         </th>
         {% endwith %}
+        <th>Groups</th>
         <th>Email</th>
       </tr>
     </thead>
@@ -64,10 +65,14 @@
         <td>{{ u.first_name|default:"—" }}</td>
         <td>{{ u.last_name|default:"—" }}</td>
         <td>{% if u.profile.institution %}<span class="tag">{{ u.profile.institution }}</span>{% else %}—{% endif %}</td>
+        <td>
+          {% for grp in u.groups.all %}<span class="tag gray">{{ grp.name }}</span>{% endfor %}
+          {% if not u.groups.all %}—{% endif %}
+        </td>
         <td>{{ u.email|default:"—" }}</td>
       </tr>
       {% empty %}
-      <tr><td colspan="4"><div class="empty">No users found</div></td></tr>
+      <tr><td colspan="5"><div class="empty">No users found</div></td></tr>
       {% endfor %}
     </tbody>
   </table>

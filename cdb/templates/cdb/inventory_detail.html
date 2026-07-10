@@ -59,6 +59,10 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
   <div>
     <div class="card">
       <h2>Instance Details</h2>
+      <div class="field-group">
+        <div class="field-label">Component</div>
+        <div class="field-value"><a href="{% url 'component-detail' instance.component.pk %}">{{ instance.component.name }}</a></div>
+      </div>
       {% if instance.tag %}
       <div class="field-group">
         <div class="field-label">Tag</div>
@@ -77,6 +81,18 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
       <div class="field-group">
         <div class="field-label">Institution</div>
         <div class="field-value">{{ instance.location.institution.name }}</div>
+      </div>
+      {% endif %}
+      {% if instance.owner_group %}
+      <div class="field-group">
+        <div class="field-label">Owner Group</div>
+        <div class="field-value"><span class="tag gray">{{ instance.owner_group }}</span></div>
+      </div>
+      {% endif %}
+      {% if instance.owner_user %}
+      <div class="field-group">
+        <div class="field-label">Owner</div>
+        <div class="field-value">{{ instance.owner_user.get_full_name|default:instance.owner_user.username }}</div>
       </div>
       {% endif %}
       {% if instance.description %}

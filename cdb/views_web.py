@@ -265,7 +265,7 @@ def inventory_list(request):
             return redirect('inventory-detail', pk=instance.pk)
 
     q           = request.GET.get('q', '')
-    institution = request.GET.get('institution', '')
+    location    = request.GET.get('location', '')
     system      = request.GET.get('system', '')
     group       = request.GET.get('group', '')
     owner       = request.GET.get('owner', '')
@@ -281,8 +281,8 @@ def inventory_list(request):
             Q(tag__icontains=q) |
             Q(serial_number__icontains=q) | Q(component__name__icontains=q)
         )
-    if institution:
-        qs = qs.filter(location__institution__abbreviation=institution)
+    if location:
+        qs = qs.filter(location_id=location)
     if system:
         qs = qs.filter(component__technical_system__name=system)
     if group:
@@ -316,14 +316,13 @@ def inventory_list(request):
     context = {
         'page_obj':     page_obj,
         'q':            q,
-        'institution':  institution,
+        'location':     location,
         'system':       system,
         'group':        group,
         'owner':        owner,
         'sort':         sort,
         'dir':          direction,
         'sort_qs':      sort_qs,
-        'institutions': Institution.objects.all(),
         'systems':      TechnicalSystem.objects.order_by('name'),
         'groups':       Group.objects.order_by('name'),
         'users':        User.objects.order_by('username'),
@@ -536,7 +535,7 @@ def system_detail(request, pk):
             return redirect(url)
 
     q           = request.GET.get('q', '')
-    institution = request.GET.get('institution', '')
+    location    = request.GET.get('location', '')
     group       = request.GET.get('group', '')
     owner       = request.GET.get('owner', '')
 
@@ -552,8 +551,8 @@ def system_detail(request, pk):
             Q(tag__icontains=q) |
             Q(serial_number__icontains=q) | Q(component__name__icontains=q)
         )
-    if institution:
-        qs = qs.filter(location__institution__abbreviation=institution)
+    if location:
+        qs = qs.filter(location_id=location)
     if group:
         qs = qs.filter(owner_group__name=group)
     if owner:
@@ -564,12 +563,12 @@ def system_detail(request, pk):
     context = {
         'page_obj':     page_obj,
         'q':            q,
-        'institution':  institution,
+        'location':     location,
         'system':       system.name,
         'group':        group,
         'owner':        owner,
         'page_title':   'Inventory — ' + system.name,
-        'institutions': Institution.objects.all(),
+        'locations':    Location.objects.select_related('institution').order_by('name'),
         'systems':      TechnicalSystem.objects.order_by('name'),
         'groups':       Group.objects.order_by('name'),
         'users':        User.objects.order_by('username'),
@@ -595,7 +594,7 @@ def user_list(request):
 
     users = User.objects.exclude(username='admin').select_related(
         'profile__institution',
-    )
+    ).prefetch_related('groups')
     if group:
         users = users.filter(groups__name=group)
     if institution:

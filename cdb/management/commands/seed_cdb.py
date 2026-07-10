@@ -122,6 +122,9 @@ class Command(BaseCommand):
         test_lab, _ = Location.objects.get_or_create(
             name="Test Lab", location_type="room", institution=uic,
         )
+        bldg_510a, _ = Location.objects.get_or_create(
+            name="Bldg,510A", location_type="building", institution=bnl,
+        )
 
         # Link each user to their home institution.
         for user, inst in [(crafts, cua), (gnigmat, uic), (ullrich, bnl), (maxim, bnl), (ottjenni, hawaii)]:
