@@ -15,7 +15,11 @@ Idempotent: safe to run multiple times, never duplicates or clobbers
 existing records (uses get_or_create() throughout; passwords are only
 set the first time an account is created).
 """
+import os
+
+from django.conf import settings
 from django.contrib.auth.models import User, Group
+from django.core.files import File
 from django.core.management.base import BaseCommand
 from cdb.models import (
     Institution, Location, TechnicalSystem, Component, ComponentInstance,
@@ -62,8 +66,11 @@ class Command(BaseCommand):
             return u
 
         mkuser("admin", is_staff=True, is_superuser=True)
-        mkuser("maxim", is_staff=True, is_superuser=True, last_name="Potekhin",
-               first_name="Maxim", email="potekhin@bnl.gov")
+        maxim = mkuser("maxim", is_staff=True, is_superuser=True,
+                        first_name="Maxim", last_name="Potekhin", email="potekhin@bnl.gov")
+        ottjenni = mkuser("ottjenni", groups=["BTOF"],
+                           first_name="Jennifer", last_name="Ott",
+                           email="ottjenni@hawaii.edu")
         gnigmat = mkuser("gnigmat", groups=["BTOF"],
                           first_name="Grigory", last_name="Nigmatkulov",
                           email="gnigmat@uic.edu")
@@ -103,6 +110,11 @@ class Command(BaseCommand):
             defaults={"abbreviation": "BNL", "country": "USA", "city": "Upton, NY",
                       "url": "https://www.bnl.gov"},
         )
+        hawaii, _ = Institution.objects.get_or_create(
+            name="University of Hawaii",
+            defaults={"abbreviation": "UH", "country": "USA", "city": "Honolulu, HI",
+                      "url": "https://www.hawaii.edu"},
+        )
 
         storage_room, _ = Location.objects.get_or_create(
             name="Storage Room", location_type="room", institution=cua,
@@ -112,7 +124,7 @@ class Command(BaseCommand):
         )
 
         # Link each user to their home institution.
-        for user, inst in [(crafts, cua), (gnigmat, uic), (ullrich, bnl)]:
+        for user, inst in [(crafts, cua), (gnigmat, uic), (ullrich, bnl), (maxim, bnl), (ottjenni, hawaii)]:
             UserProfile.objects.get_or_create(user=user, defaults={"institution": inst})
 
         # Components  (Component has no "function" field -- the functional
@@ -219,6 +231,20 @@ class Command(BaseCommand):
             component=crystal, property_type=height_pt, tag="",
             defaults={"value": "2", "units": "cm"},
         )
+
+        # Attach the crystal's reference photo as an Image-type property.
+        # Only assign the file the first time (or if it's missing) --
+        # FileField.save() renames on every call to avoid clobbering an
+        # existing file, so calling it unconditionally on every idempotent
+        # re-seed would pile up "PbWO4_crystal_<hash>.jpg" duplicates.
+        image_pv, _ = PropertyValue.objects.get_or_create(
+            component=crystal, property_type=image_pt, tag="",
+        )
+        if not image_pv.file:
+            photo_path = os.path.join(settings.BASE_DIR, "assets", "images", "PbWO4_crystal.jpg")
+            if os.path.exists(photo_path):
+                with open(photo_path, "rb") as f:
+                    image_pv.file.save("PbWO4_crystal.jpg", File(f), save=True)
 
         # One instance overrides the inherited Weight -- this particular
         # crystal was measured slightly lighter than the catalog default.
