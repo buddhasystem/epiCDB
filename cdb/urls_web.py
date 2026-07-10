@@ -18,6 +18,8 @@ urlpatterns = [
                                        views_web.component_property_delete, name="component-property-delete"),
     path("components/<str:pk>/properties/<str:property_id>/update/",
                                        views_web.component_property_update, name="component-property-update"),
+    path("components/<str:pk>/instances/create/",
+                                       views_web.component_instance_create, name="component-instance-create"),
     path("inventory/",                views_web.inventory_list,   name="inventory-list"),
     path("inventory/<str:pk>/",       views_web.inventory_detail, name="inventory-detail"),
     path("inventory/<str:pk>/properties/<str:property_id>/update/",

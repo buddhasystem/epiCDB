@@ -4,6 +4,7 @@ URL config: cdb/urls_web.py
 """
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
+from django.http import HttpResponseForbidden
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User, Group
 from django.db.models import Q, Count
@@ -169,11 +170,16 @@ def component_detail(request, pk):
          if inst.location and inst.location.institution},
         key=str,
     )
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_add_instance = bool(comp.owner_group_id) and comp.owner_group_id in user_group_ids
+
     context = {
-        'component':      comp,
-        'active_page':    'components',
-        'sites':          sites,
-        'property_types': PropertyType.objects.order_by('name'),
+        'component':        comp,
+        'active_page':      'components',
+        'sites':            sites,
+        'property_types':   PropertyType.objects.order_by('name'),
+        'can_add_instance': can_add_instance,
+        'locations':        Location.objects.select_related('institution').order_by('name'),
         'form_error':      form_error,
         'form_data':       form_data,
         'open_modal':      bool(form_error),
@@ -213,6 +219,41 @@ def component_property_update(request, pk, property_id):
         pv.value = request.POST.get('value', '').strip()
         pv.units = request.POST.get('units', '').strip()
         pv.save()
+    return redirect('component-detail', pk=comp.pk)
+
+
+@login_required
+def component_instance_create(request, pk):
+    """Create a new ComponentInstance for this component from the "+ Add
+    Instance" button on the component detail page, and send the user
+    straight to the new instance's page. Only members of the component's
+    owner_group may do this. The button is hidden from everyone else, but
+    this is the authoritative, server-side check -- a POST here from
+    anyone else (or against a component with no owner_group at all to
+    check membership against) is rejected with 403 rather than silently
+    creating an instance owned by a group the requester doesn't belong
+    to."""
+    comp = get_object_or_404(Component, pk=pk)
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_add = bool(comp.owner_group_id) and comp.owner_group_id in user_group_ids
+
+    if request.method == 'POST':
+        if not can_add:
+            return HttpResponseForbidden("You don't have permission to add instances of this component.")
+        tag           = request.POST.get('tag', '').strip()
+        serial_number = request.POST.get('serial_number', '').strip()
+        location_id   = request.POST.get('location') or None
+        instance = ComponentInstance.objects.create(
+            tag=tag,
+            serial_number=serial_number,
+            component=comp,
+            location_id=location_id,
+            owner_group=comp.owner_group,
+            owner_user=request.user,
+            created_by=request.user,
+        )
+        return redirect('inventory-detail', pk=instance.pk)
+
     return redirect('component-detail', pk=comp.pk)
 
 

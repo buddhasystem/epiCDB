@@ -110,14 +110,21 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">
         <h2 style="margin:0">Inventory Instances ({{ component.instances.count }})</h2>
-        {% if sites %}
-        <select id="site-filter" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;background:var(--surface);color:var(--text)">
-          <option value="">All Sites</option>
-          {% for site in sites %}
-          <option value="{{ site }}">{{ site }}</option>
-          {% endfor %}
-        </select>
-        {% endif %}
+        <div style="display:flex;align-items:center;gap:8px">
+          {% if sites %}
+          <select id="site-filter" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;background:var(--surface);color:var(--text)">
+            <option value="">All Sites</option>
+            {% for site in sites %}
+            <option value="{{ site }}">{{ site }}</option>
+            {% endfor %}
+          </select>
+          {% endif %}
+          {% if can_add_instance %}
+          <button type="button" class="btn btn-ghost" style="font-size:12.5px;padding:5px 10px" onclick="document.getElementById('add-instance-modal').showModal()">
+            + Add Instance
+          </button>
+          {% endif %}
+        </div>
       </div>
       {% if component.instances.all %}
       <div class="table-wrap" style="margin:0">
@@ -268,6 +275,49 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
   {% endif %}
 })();
 </script>
+
+{% if can_add_instance %}
+<dialog id="add-instance-modal" class="modal">
+  <form method="post" action="{% url 'component-instance-create' component.pk %}">
+    {% csrf_token %}
+    <div class="modal-header"><h2>Add Instance</h2></div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--muted);margin:0">
+        Creates a new inventory instance of {{ component.name }}, owned by {{ component.owner_group }}.
+      </p>
+      <div class="modal-field">
+        <label for="ai2-tag">Tag</label>
+        <input type="text" id="ai2-tag" name="tag">
+      </div>
+      <div class="modal-field">
+        <label for="ai2-serial">Serial Number</label>
+        <input type="text" id="ai2-serial" name="serial_number">
+      </div>
+      <div class="modal-field">
+        <label for="ai2-location">Location</label>
+        <select id="ai2-location" name="location">
+          <option value="">—</option>
+          {% for loc in locations %}
+            <option value="{{ loc.pk }}">{{ loc.full_path }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost" onclick="document.getElementById('add-instance-modal').close()">Cancel</button>
+      <button type="submit" class="btn btn-primary">Create</button>
+    </div>
+  </form>
+</dialog>
+<script>
+(function () {
+  var dlg = document.getElementById('add-instance-modal');
+  dlg.addEventListener('click', function (e) {
+    if (e.target === dlg) dlg.close();
+  });
+})();
+</script>
+{% endif %}
 
 <script>
 (function () {
