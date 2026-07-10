@@ -584,11 +584,46 @@ def system_detail(request, pk):
 @login_required
 def user_list(request):
     """List all site users (excluding the built-in "admin" account) with
-    their name, home institution, and email."""
+    their name, home institution, and email. Optionally filtered down to
+    one group via ?group=<name> and/or one institution via
+    ?institution=<abbreviation>, and sortable by Last Name or Institution
+    via ?sort=last_name|institution&dir=asc|desc."""
+    group        = request.GET.get('group', '')
+    institution  = request.GET.get('institution', '')
+    sort         = request.GET.get('sort', '')
+    direction    = request.GET.get('dir', 'asc')
+
     users = User.objects.exclude(username='admin').select_related(
         'profile__institution',
-    ).order_by('first_name', 'last_name', 'username')
-    context = {'users': users, 'active_page': 'users'}
+    )
+    if group:
+        users = users.filter(groups__name=group)
+    if institution:
+        users = users.filter(profile__institution__abbreviation=institution)
+
+    _sort_map = {
+        'last_name':   'last_name',
+        'institution': 'profile__institution__name',
+    }
+    if sort in _sort_map:
+        order_field = _sort_map[sort]
+        if direction == 'desc':
+            order_field = '-' + order_field
+        users = users.order_by(order_field, 'first_name', 'username')
+    else:
+        users = users.order_by('first_name', 'last_name', 'username')
+
+    context = {
+        'users':        users,
+        'groups':       Group.objects.order_by('name'),
+        'group':        group,
+        'institutions': Institution.objects.order_by('name'),
+        'institution':  institution,
+        'sort':         sort,
+        'dir':          direction,
+        'sort_qs':      _qs(request, 'sort', 'dir'),
+        'active_page':  'users',
+    }
     return render(request, 'cdb/users.html', context)
 
 

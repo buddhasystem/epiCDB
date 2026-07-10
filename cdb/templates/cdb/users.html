@@ -2,20 +2,59 @@
 {% block title %}Users — ePIC CDB{% endblock %}
 
 {% block content %}
+<style>
+.th-sort { cursor:pointer; white-space:nowrap; user-select:none; }
+.th-sort a { color:inherit; text-decoration:none; display:flex; align-items:center; gap:4px; }
+.sort-icon { font-size:10px; opacity:.45; }
+.sort-icon.active { opacity:1; color:var(--accent); }
+</style>
+
 <div class="page-header">
   <div>
     <h1>Users</h1>
-    <div class="page-subtitle">People with access to the CDB</div>
+    <div class="page-subtitle">Click on a table row to see the inventory owned by the user.</div>
   </div>
 </div>
 
+<form method="get" class="toolbar">
+  <select name="group" class="filter-select">
+    <option value="">All Groups</option>
+    {% for grp in groups %}
+      <option value="{{ grp.name }}" {% if group == grp.name %}selected{% endif %}>{{ grp.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="institution" class="filter-select">
+    <option value="">All Institutions</option>
+    {% for inst in institutions %}
+      <option value="{{ inst.abbreviation }}" {% if institution == inst.abbreviation %}selected{% endif %}>
+        {{ inst.abbreviation }} — {{ inst.name }}
+      </option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-primary">Filter</button>
+  {% if group or institution %}<a href="{% url 'user-list' %}" class="btn btn-ghost">Clear</a>{% endif %}
+</form>
+
+{% with csort=sort cdir=dir cqs=sort_qs %}
 <div class="table-wrap">
   <table>
     <thead>
       <tr>
         <th>First Name</th>
-        <th>Last Name</th>
-        <th>Institution</th>
+        {% with col="last_name" label="Last Name" %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}<span class="sort-icon {% if csort == col %}active{% endif %}">{% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}</span>
+          </a>
+        </th>
+        {% endwith %}
+        {% with col="institution" label="Institution" %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}<span class="sort-icon {% if csort == col %}active{% endif %}">{% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}</span>
+          </a>
+        </th>
+        {% endwith %}
         <th>Email</th>
       </tr>
     </thead>
@@ -33,4 +72,5 @@
     </tbody>
   </table>
 </div>
+{% endwith %}
 {% endblock %}
