@@ -62,14 +62,17 @@ class Command(BaseCommand):
             return u
 
         mkuser("admin", is_staff=True, is_superuser=True)
-        mkuser("maxim", is_staff=True, is_superuser=True,
-               first_name="Maxim", email="buddhasystem@gmail.com")
+        mkuser("maxim", is_staff=True, is_superuser=True, last_name="Potekhin",
+               first_name="Maxim", email="potekhin@bnl.gov")
         gnigmat = mkuser("gnigmat", groups=["BTOF"],
                           first_name="Grigory", last_name="Nigmatkulov",
                           email="gnigmat@uic.edu")
         crafts  = mkuser("crafts",  groups=["BEMC"],
                           first_name="Casey", last_name="Crafts",
                           email="crafts@cua.edu")
+        ullrich = mkuser("ullrich", groups=["BEMC", "BTOF"],
+                          first_name="Thomas", last_name="Ullrich",
+                          email="thomas.ullrich@bnl.gov")
 
         # Technical systems, each owned by a responsible group
         ts = {}
@@ -95,6 +98,11 @@ class Command(BaseCommand):
             defaults={"abbreviation": "UIC", "country": "USA", "city": "Chicago",
                       "url": "https://www.uic.edu"},
         )
+        bnl, _ = Institution.objects.get_or_create(
+            name="Brookhaven National Laboratory",
+            defaults={"abbreviation": "BNL", "country": "USA", "city": "Upton, NY",
+                      "url": "https://www.bnl.gov"},
+        )
 
         storage_room, _ = Location.objects.get_or_create(
             name="Storage Room", location_type="room", institution=cua,
@@ -104,7 +112,7 @@ class Command(BaseCommand):
         )
 
         # Link each user to their home institution.
-        for user, inst in [(crafts, cua), (gnigmat, uic)]:
+        for user, inst in [(crafts, cua), (gnigmat, uic), (ullrich, bnl)]:
             UserProfile.objects.get_or_create(user=user, defaults={"institution": inst})
 
         # Components  (Component has no "function" field -- the functional
@@ -184,6 +192,9 @@ class Command(BaseCommand):
         )
         height_pt, _ = PropertyType.objects.get_or_create(
             name="Height", defaults={"category": "physical", "default_units": "cm"},
+        )
+        image_pt, _ = PropertyType.objects.get_or_create(
+            name="Image", defaults={"category": "documentation", "handler": "image"},
         )
 
         # Component-level defaults: every instance of the crystal inherits
