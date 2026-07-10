@@ -14,6 +14,8 @@ urlpatterns = [
     path("dashboard/",                views_web.dashboard,        name="dashboard"),
     path("components/",               views_web.component_list,   name="component-list"),
     path("components/<str:pk>/",      views_web.component_detail, name="component-detail"),
+    path("components/<str:pk>/properties/<str:property_id>/delete/",
+                                       views_web.component_property_delete, name="component-property-delete"),
     path("inventory/",                views_web.inventory_list,   name="inventory-list"),
     path("inventory/<str:pk>/",       views_web.inventory_detail, name="inventory-detail"),
     path("designs/",                  views_web.design_list,      name="design-list"),

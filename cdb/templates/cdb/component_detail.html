@@ -155,24 +155,33 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
       {% if component.properties.all %}
       <div class="prop-list">
         {% for pv in component.properties.all %}
-        <div class="prop-row">
-          <span class="prop-name">{{ pv.property_type }}{% if pv.tag %} <span style="color:var(--muted);font-size:11px">({{ pv.tag }})</span>{% endif %}</span>
-          <span class="prop-value" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            {% if pv.file %}
-              {% if pv.property_type.handler == 'image' %}
-                <a href="{{ pv.file.url }}" target="_blank" rel="noopener"><img src="{{ pv.file.url }}" style="max-height:60px;max-width:120px;border-radius:6px;display:block"></a>
-              {% else %}
-                <a href="{{ pv.file.url }}" target="_blank" rel="noopener" class="prop-link-trunc" title="{{ pv.file.name|cut:'property_files/' }}">📎 {{ pv.file.name|cut:"property_files/" }}</a>
+        <div class="prop-row" style="justify-content:flex-start;gap:8px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;flex:1;min-width:0;gap:8px">
+            <span class="prop-name">{{ pv.property_type }}{% if pv.tag %} <span style="color:var(--muted);font-size:11px">({{ pv.tag }})</span>{% endif %}</span>
+            <span class="prop-value" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              {% if pv.file %}
+                {% if pv.property_type.handler == 'image' %}
+                  <a href="{{ pv.file.url }}" target="_blank" rel="noopener"><img src="{{ pv.file.url }}" style="max-height:60px;max-width:120px;border-radius:6px;display:block"></a>
+                {% else %}
+                  <a href="{{ pv.file.url }}" target="_blank" rel="noopener" class="prop-link-trunc" title="{{ pv.file.name|cut:'property_files/' }}">📎 {{ pv.file.name|cut:"property_files/" }}</a>
+                {% endif %}
+              {% elif pv.value %}
+                {% if pv.property_type.handler == 'http_link' or pv.property_type.handler == 'document' or pv.property_type.handler == 'image' %}
+                  <a href="{{ pv.value }}" target="_blank" rel="noopener" class="prop-link-trunc" title="{{ pv.value }}">{{ pv.value }}</a>
+                {% else %}
+                  {{ pv.value }}
+                {% endif %}
               {% endif %}
-            {% elif pv.value %}
-              {% if pv.property_type.handler == 'http_link' or pv.property_type.handler == 'document' or pv.property_type.handler == 'image' %}
-                <a href="{{ pv.value }}" target="_blank" rel="noopener" class="prop-link-trunc" title="{{ pv.value }}">{{ pv.value }}</a>
-              {% else %}
-                {{ pv.value }}
-              {% endif %}
-            {% endif %}
-            {% if pv.units %}<span style="color:var(--muted);font-size:11px">{{ pv.units }}</span>{% endif %}
-          </span>
+              {% if pv.units %}<span style="color:var(--muted);font-size:11px">{{ pv.units }}</span>{% endif %}
+            </span>
+          </div>
+          <form method="post" action="{% url 'component-property-delete' component.pk pv.pk %}"
+                onsubmit="return confirm('Remove this property?{% if pv.file %} The attached file will be deleted too.{% endif %}');"
+                style="margin:0;flex-shrink:0">
+            {% csrf_token %}
+            <button type="submit" title="Remove property"
+                    style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:2px 4px">✕</button>
+          </form>
         </div>
         {% endfor %}
       </div>

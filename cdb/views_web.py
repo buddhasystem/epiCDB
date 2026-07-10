@@ -181,6 +181,23 @@ def component_detail(request, pk):
     return render(request, 'cdb/component_detail.html', context)
 
 
+@login_required
+def component_property_delete(request, pk, property_id):
+    """Remove a property from a component's Properties panel.
+    property_id is scoped to component=pk so a property can only be deleted
+    through the component it actually belongs to. If the property has an
+    attached file, it's removed from storage too -- Django does not delete
+    the underlying file automatically when a FileField-holding row is
+    deleted, so leaving this out would silently orphan files on disk."""
+    comp = get_object_or_404(Component, pk=pk)
+    pv = get_object_or_404(PropertyValue, pk=property_id, component=comp)
+    if request.method == 'POST':
+        if pv.file:
+            pv.file.delete(save=False)
+        pv.delete()
+    return redirect('component-detail', pk=comp.pk)
+
+
 # ── Component Inventory ───────────────────────────────────────────────────────
 
 @login_required
