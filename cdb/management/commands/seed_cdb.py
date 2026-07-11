@@ -16,11 +16,14 @@ existing records (uses get_or_create() throughout; passwords are only
 set the first time an account is created).
 """
 import os
+import random
+from datetime import datetime, time as dt_time
 
 from django.conf import settings
 from django.contrib.auth.models import User, Group
 from django.core.files import File
 from django.core.management.base import BaseCommand
+from django.utils import timezone
 from cdb.models import (
     Institution, Location, TechnicalSystem, Component, ComponentInstance,
     UserProfile, PropertyType, PropertyValue, Design, DesignElement, LogEntry,
@@ -280,6 +283,24 @@ class Command(BaseCommand):
         if not log_created and log_entry.logged_by_id != crafts.id:
             log_entry.logged_by = crafts
             log_entry.save()
+
+        # Backdated record: BTOF-SENSOR-001 was actually added to inventory
+        # on 2026-07-09, at some point during the day -- the exact time
+        # wasn't tracked at the time, so a plausible one is picked once and
+        # then left alone on every subsequent (idempotent) re-seed.
+        sensor1 = ComponentInstance.objects.filter(tag="BTOF-SENSOR-001").first()
+        if sensor1:
+            backdated_time = timezone.make_aware(datetime.combine(
+                datetime(2026, 7, 9).date(),
+                dt_time(random.randint(0, 23), random.randint(0, 59), random.randint(0, 59)),
+            ))
+            sensor_log, sensor_log_created = LogEntry.objects.get_or_create(
+                component_instance=sensor1, entry="Inventory item created",
+                defaults={"topic": "inventory", "logged_by": gnigmat, "timestamp": backdated_time},
+            )
+            if not sensor_log_created and sensor_log.topic != "inventory":
+                sensor_log.topic = "inventory"
+                sensor_log.save()
 
         self.stdout.write(self.style.SUCCESS(
             f"\nDone.  admin/admin, maxim/maxim | "

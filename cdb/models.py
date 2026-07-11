@@ -194,6 +194,7 @@ class LogEntry(models.Model):
     TOPIC_CHOICES = [
         ("",             "General"),
         ("installation", "Installation"),
+        ("inventory",    "Inventory"),
         ("maintenance",  "Maintenance"),
         ("inspection",   "Inspection"),
         ("repair",       "Repair"),
