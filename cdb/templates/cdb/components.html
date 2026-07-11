@@ -156,6 +156,7 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
           </a>
         </th>
         {% endwith %}
+        <th>Description</th>
       </tr>
     </thead>
     <tbody>
@@ -168,6 +169,7 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
         <td><span class="mono-code">{{ comp.model_number|default:"—" }}</span></td>
         <td>{% if comp.technical_system %}<span class="tag">{{ comp.technical_system }}</span>{% else %}—{% endif %}</td>
         <td>{{ comp.instance_count }}</td>
+        <td style="color:var(--muted);font-size:12.5px">{{ comp.description|default:"—"|truncatechars:60 }}</td>
       </tr>
       {% empty %}
       <tr><td colspan="5"><div class="empty">No components found{% if q %} for "{{ q }}"{% endif %}</div></td></tr>

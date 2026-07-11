@@ -559,3 +559,16 @@ python manage.py makemigrations cdb
 python manage.py migrate
 python manage.py seed_cdb
 ```
+
+## Logging 
+
+Log entries are stored in a single LogEntry table, same table regardless of what the entry is attached to.
+Each row has a topic (General/Installation/Maintenance/Inspection/Repair/Decommission/Other), free-text entry,
+an optional attachment file (log_attachments/ under MEDIA_ROOT), who logged it, and a timestamp — and it links
+to exactly one of component, component_instance, or design via nullable foreign keys, all CASCADE, so deleting
+a Component/Instance/Design deletes its logs too.
+
+There's a /logs/ page (log_list) that browses and filters all of them, and each Component/Instance/Design detai
+page shows its own logs via the reverse related_name="log_entries". One thing worth knowing: like Designs,
+there's currently no "Add Log Entry" form anywhere in the web UI — log_list is read-only,
+so the only way to create one right now is the Django admin or direct ORM/API access.

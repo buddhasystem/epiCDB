@@ -23,7 +23,7 @@ from django.core.files import File
 from django.core.management.base import BaseCommand
 from cdb.models import (
     Institution, Location, TechnicalSystem, Component, ComponentInstance,
-    UserProfile, PropertyType, PropertyValue,
+    UserProfile, PropertyType, PropertyValue, Design, DesignElement, LogEntry,
 )
 
 
@@ -256,6 +256,30 @@ class Command(BaseCommand):
                 component_instance=crystal_instances[0], property_type=weight_pt, tag="",
                 defaults={"value": "0.44", "units": "kg"},
             )
+
+        # Design: "BEMC tower" -- a placeholder assembly referencing catalog
+        # items (not specific inventory instances) for one crystal and its
+        # four readout photosensors.
+        bemc_tower, _ = Design.objects.get_or_create(
+            name="BEMC tower",
+            defaults={"project": "ePIC",
+                      "description": "One BEMC tower: a PbWO4 crystal read out by four SiPMs."},
+        )
+        DesignElement.objects.get_or_create(
+            design=bemc_tower, element_name="Crystal",
+            defaults={"component": crystal, "quantity": 1},
+        )
+        DesignElement.objects.get_or_create(
+            design=bemc_tower, element_name="SiPM",
+            defaults={"component": pm, "quantity": 4},
+        )
+        log_entry, log_created = LogEntry.objects.get_or_create(
+            design=bemc_tower, entry="BEMC Tower Definition added",
+            defaults={"logged_by": crafts},
+        )
+        if not log_created and log_entry.logged_by_id != crafts.id:
+            log_entry.logged_by = crafts
+            log_entry.save()
 
         self.stdout.write(self.style.SUCCESS(
             f"\nDone.  admin/admin, maxim/maxim | "
