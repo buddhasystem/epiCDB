@@ -72,12 +72,12 @@ if not django.conf.settings.configured:
 
 from django.contrib.auth import authenticate  # noqa: E402
 from django.contrib.auth.models import User  # noqa: E402
+from asgiref.sync import sync_to_async  # noqa: E402
 
 from cdb_client import CDBClient  # noqa: E402
 from cdb_client.serializers import instance_brief, institution_brief  # noqa: E402
 
 from mcp.server.fastmcp import FastMCP  # noqa: E402
-from starlette.applications import Starlette  # noqa: E402
 from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
 from starlette.requests import Request  # noqa: E402
 from starlette.responses import JSONResponse, Response  # noqa: E402
@@ -87,13 +87,12 @@ from starlette.responses import JSONResponse, Response  # noqa: E402
 # 2. Per-request auth context
 # ---------------------------------------------------------------------
 # Populated by BasicAuthMiddleware before a request reaches the MCP
-# handler; read by every tool via require_user(). asyncio.Task copies
-# the enclosing contextvars.Context on creation, so this propagates
-# correctly through the normal single-request async call chain. If you
-# change the SDK's transport internals so that tool dispatch happens on
-# a *separate* thread pool without context propagation, thread the user
-# through FastMCP's Context/dependency-injection mechanism instead of a
-# contextvar.
+# handler; read by every tool via require_user(). Every tool body runs
+# inside the django_tool() wrapper below, which offloads it to a worker
+# thread via asgiref's sync_to_async — and sync_to_async explicitly
+# copies the current contextvars.Context into that thread before running
+# the function, so _current_user is guaranteed to still be set correctly
+# even though the actual Django ORM calls happen off the event loop.
 _current_user: ContextVar[Optional[User]] = ContextVar("_current_user", default=None)
 
 
@@ -109,6 +108,45 @@ def require_user() -> User:
 
 def scoped_client() -> CDBClient:
     return CDBClient(user=require_user())
+
+
+def django_tool(fn):
+    """
+    Wrap a synchronous, Django-ORM-calling tool function so its body
+    always runs on a real worker thread via asgiref.sync_to_async,
+    regardless of how a given `mcp` SDK version schedules plain `def`
+    tool functions.
+
+    Why this exists: Django's ORM refuses a synchronous DB call made
+    directly on the event-loop thread and raises exactly
+    "You cannot call this from an async context — use a thread or
+    sync_to_async." Some `mcp` SDK versions call `def` tools directly on
+    the loop instead of offloading them to a thread, which trips that
+    check the moment the tool touches the database. Wrapping explicitly
+    here removes the dependency on the SDK's (undocumented, version-
+    dependent) scheduling behavior entirely.
+
+    thread_sensitive=False is deliberate: each call gets its own
+    thread-pool worker rather than being serialized onto a single
+    "main thread" — Django's ORM manages its own per-thread connections
+    safely, so there's no need to pin all calls to one thread.
+
+    Note on introspection: FastMCP builds each tool's argument schema
+    from the function's signature. functools.wraps sets `__wrapped__`
+    on the returned async wrapper, and inspect.signature() follows
+    `__wrapped__` by default — so FastMCP still sees the original
+    parameter names, types, and defaults correctly, even though the
+    object it actually registers and awaits is this wrapper.
+    """
+    import functools
+
+    async_fn = sync_to_async(fn, thread_sensitive=False)
+
+    @functools.wraps(fn)
+    async def wrapper(*args, **kwargs):
+        return await async_fn(*args, **kwargs)
+
+    return wrapper
 
 
 # ---------------------------------------------------------------------
@@ -224,6 +262,7 @@ mcp = FastMCP("epiCDB")
 
 
 @mcp.tool()
+@django_tool
 def cdb_whoami() -> dict:
     """Return the authenticated user's username, email, and group memberships."""
     user = require_user()
@@ -236,6 +275,7 @@ def cdb_whoami() -> dict:
 
 
 @mcp.tool()
+@django_tool
 def cdb_search(query: str, limit: int = 15) -> dict:
     """
     Cross-domain keyword search over components, physical inventory
@@ -247,6 +287,7 @@ def cdb_search(query: str, limit: int = 15) -> dict:
 
 
 @mcp.tool()
+@django_tool
 def cdb_where_is(instance_id: str) -> dict:
     """
     Current physical location, institution, and ownership of a single
@@ -256,12 +297,14 @@ def cdb_where_is(instance_id: str) -> dict:
 
 
 @mcp.tool()
+@django_tool
 def cdb_component_search(query: str, limit: int = 25) -> list[dict]:
     """Search the Component Catalog by name, alternate name, model number, or description."""
     return scoped_client().catalog.search_brief(query, limit=limit)
 
 
 @mcp.tool()
+@django_tool
 def cdb_component_summary(component_name: str) -> dict:
     """
     Full detail for a single catalog Component: description, technical
@@ -272,12 +315,14 @@ def cdb_component_summary(component_name: str) -> dict:
 
 
 @mcp.tool()
+@django_tool
 def cdb_instance_search(query: str, limit: int = 25) -> list[dict]:
     """Search physical inventory instances by tag, serial number, or component name."""
     return scoped_client().inventory.search_brief(query, limit=limit)
 
 
 @mcp.tool()
+@django_tool
 def cdb_instance_detail(instance_id: str) -> dict:
     """
     Full detail for a single physical inventory instance, looked up by
@@ -287,6 +332,7 @@ def cdb_instance_detail(instance_id: str) -> dict:
 
 
 @mcp.tool()
+@django_tool
 def cdb_instances_at_institution(institution_abbreviation: str, limit: int = 25) -> list[dict]:
     """List physical inventory instances currently located at a given institution (e.g. 'BNL')."""
     client = scoped_client()
@@ -294,42 +340,49 @@ def cdb_instances_at_institution(institution_abbreviation: str, limit: int = 25)
 
 
 @mcp.tool()
+@django_tool
 def cdb_design_search(query: str, limit: int = 25) -> list[dict]:
     """Search the Design Library by name or description."""
     return scoped_client().designs.search_brief(query, limit=limit)
 
 
 @mcp.tool()
+@django_tool
 def cdb_design_summary(design_name: str) -> dict:
     """Full detail for a design, including its recursive Bill of Materials."""
     return scoped_client().designs.summary(design_name)
 
 
 @mcp.tool()
+@django_tool
 def cdb_design_bom(design_name: str) -> list[dict]:
     """Recursive Bill of Materials for a named design (nested components and sub-designs)."""
     return scoped_client().designs.bom(design_name)
 
 
 @mcp.tool()
+@django_tool
 def cdb_list_institutions() -> list[dict]:
     """List all institutions participating in the collaboration (reference data, not scoped)."""
     return [institution_brief(i) for i in scoped_client().locations.all_institutions()]
 
 
 @mcp.tool()
+@django_tool
 def cdb_location_tree(institution_abbreviation: str) -> list[dict]:
     """Nested Building -> Room -> Cabinet -> Shelf hierarchy for one institution."""
     return scoped_client().locations.location_tree(institution_abbreviation)
 
 
 @mcp.tool()
+@django_tool
 def cdb_systems_overview() -> list[dict]:
     """Technical systems (Tracking, Calorimetry, ...) with component and instance counts."""
     return scoped_client().systems.instance_counts()
 
 
 @mcp.tool()
+@django_tool
 def cdb_create_instance(
     component_name: str,
     tag: str = "",
@@ -362,9 +415,18 @@ def cdb_create_instance(
 # `mcp` SDK release at time of writing. Verify against your installed
 # version — this is the one line most likely to need adjusting after
 # `pip install`.
-mcp_asgi_app = mcp.streamable_http_app()
-
-app = Starlette(routes=mcp_asgi_app.routes)
+#
+# IMPORTANT: attach the middleware to the app FastMCP already built —
+# do NOT reconstruct a new Starlette app from `mcp_asgi_app.routes`.
+# The returned app's *lifespan* starts the Streamable HTTP session
+# manager (the background task group that tracks in-flight MCP
+# sessions/streams); copying only `.routes` into a fresh Starlette()
+# instance silently drops that lifespan, so the session manager never
+# starts and the first real MCP request (`initialize`) 500s. Requests
+# that get rejected at 401 (wrong/missing credentials) never reach that
+# code path, so this bug is invisible to the auth-boundary checks and
+# only shows up once a request actually authenticates.
+app = mcp.streamable_http_app()
 app.add_middleware(BasicAuthMiddleware)
 
 
