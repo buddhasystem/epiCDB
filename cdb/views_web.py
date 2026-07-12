@@ -567,6 +567,31 @@ def design_detail(request, pk):
     return render(request, 'cdb/design_detail.html', context)
 
 
+@login_required
+def design_property_update(request, pk, property_id):
+    """Inline-edit a design property's value/units from the Properties
+    panel. property_id is scoped to design=pk. Only members of the
+    design's owner_group may edit -- same authorization check as adding a
+    property; a POST from anyone else is rejected with 403. Document/Image
+    property types (and any property that happens to have a file attached)
+    are excluded from editing regardless of group membership, same as the
+    component-level version of this feature."""
+    design = get_object_or_404(Design, pk=pk)
+    pv = get_object_or_404(PropertyValue, pk=property_id, design=design)
+
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_edit = bool(design.owner_group_id) and design.owner_group_id in user_group_ids
+
+    if request.method == 'POST':
+        if not can_edit:
+            return HttpResponseForbidden("You don't have permission to edit properties of this design.")
+        if pv.property_type.handler not in ('document', 'image') and not pv.file:
+            pv.value = request.POST.get('value', '').strip()
+            pv.units = request.POST.get('units', '').strip()
+            pv.save()
+    return redirect('design-detail', pk=design.pk)
+
+
 def _build_bom(design, depth=0, max_depth=10):
     """Flat list of BOM rows with depth info for template indentation."""
     rows = []

@@ -131,20 +131,28 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
           <div style="display:flex;justify-content:space-between;align-items:baseline;flex:1;min-width:0;gap:8px">
             <span class="prop-name">{{ pv.property_type }}{% if pv.tag %} <span style="color:var(--muted);font-size:11px">({{ pv.tag }})</span>{% endif %}</span>
             <span class="prop-value" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              {% if pv.file %}
-                {% if pv.property_type.handler == 'image' %}
-                  <a href="{{ pv.file.url }}" target="_blank" rel="noopener"><img src="{{ pv.file.url }}" style="max-height:60px;max-width:120px;border-radius:6px;display:block"></a>
-                {% else %}
-                  <a href="{{ pv.file.url }}" target="_blank" rel="noopener" class="prop-link-trunc" title="{{ pv.file.name|cut:'property_files/' }}">📎 {{ pv.file.name|cut:"property_files/" }}</a>
-                {% endif %}
-              {% elif pv.value %}
-                {% if pv.property_type.handler == 'http_link' or pv.property_type.handler == 'document' or pv.property_type.handler == 'image' %}
+              {% if pv.property_type.handler == 'document' or pv.property_type.handler == 'image' or pv.file %}
+                {% if pv.file %}
+                  {% if pv.property_type.handler == 'image' %}
+                    <a href="{{ pv.file.url }}" target="_blank" rel="noopener"><img src="{{ pv.file.url }}" style="max-height:60px;max-width:120px;border-radius:6px;display:block"></a>
+                  {% else %}
+                    <a href="{{ pv.file.url }}" target="_blank" rel="noopener" class="prop-link-trunc" title="{{ pv.file.name|cut:'property_files/' }}">📎 {{ pv.file.name|cut:"property_files/" }}</a>
+                  {% endif %}
+                {% elif pv.value %}
                   <a href="{{ pv.value }}" target="_blank" rel="noopener" class="prop-link-trunc" title="{{ pv.value }}">{{ pv.value }}</a>
-                {% else %}
-                  {{ pv.value }}
                 {% endif %}
+                {% if pv.units %}<span style="color:var(--muted);font-size:11px">{{ pv.units }}</span>{% endif %}
+              {% elif can_add_property %}
+                <form method="post" action="{% url 'design-property-update' design.pk pv.pk %}" style="display:flex;gap:6px;align-items:center;margin:0">
+                  {% csrf_token %}
+                  <input type="text" name="value" value="{{ pv.value }}" placeholder="value" style="width:90px;padding:4px 7px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;color:var(--text);background:var(--surface)">
+                  <input type="text" name="units" value="{{ pv.units }}" placeholder="units" style="width:55px;padding:4px 7px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;color:var(--text);background:var(--surface)">
+                  <button type="submit" title="Save" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--accent);cursor:pointer;font-size:12px;padding:4px 8px;font-weight:600">Save</button>
+                </form>
+              {% else %}
+                {{ pv.value }}
+                {% if pv.units %}<span style="color:var(--muted);font-size:11px">{{ pv.units }}</span>{% endif %}
               {% endif %}
-              {% if pv.units %}<span style="color:var(--muted);font-size:11px">{{ pv.units }}</span>{% endif %}
             </span>
           </div>
         </div>
