@@ -161,7 +161,11 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
       </div>
       {% if component.properties.all %}
       <div class="prop-list">
-        {% for pv in component.properties.all %}
+        {% for group in prop_groups %}
+          {% if prop_groups|length > 1 %}
+          <div style="font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:{% if not forloop.first %}10px{% else %}0{% endif %} 0 2px">{{ group.units|default:"No units" }}</div>
+          {% endif %}
+          {% for pv in group.items %}
         <div class="prop-row" style="justify-content:flex-start;gap:8px">
           <div style="display:flex;justify-content:space-between;align-items:baseline;flex:1;min-width:0;gap:8px">
             <span class="prop-name">{{ pv.property_type }}{% if pv.tag %} <span style="color:var(--muted);font-size:11px">({{ pv.tag }})</span>{% endif %}</span>
@@ -195,6 +199,7 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
                     style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:2px 4px">✕</button>
           </form>
         </div>
+          {% endfor %}
         {% endfor %}
       </div>
       {% else %}

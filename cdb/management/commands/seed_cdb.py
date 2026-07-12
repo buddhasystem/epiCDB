@@ -234,11 +234,44 @@ class Command(BaseCommand):
             defaults={"value": "2", "units": "cm"},
         )
 
-        # Component-level default: Hamamatsu SiPM weight.
-        PropertyValue.objects.get_or_create(
+        # Component-level default: Hamamatsu SiPM weight. Uses the
+        # get_or_create + conditional-update pattern (not plain
+        # get_or_create with defaults=) so that if a Weight row already
+        # exists for this component -- e.g. entered manually through the
+        # web UI before this seed code existed -- re-running the seed
+        # still forces it to the correct 2.1 g rather than leaving a
+        # stale value in place.
+        pm_weight_pv, pm_weight_created = PropertyValue.objects.get_or_create(
             component=pm, property_type=weight_pt, tag="",
             defaults={"value": "2.1", "units": "g"},
         )
+        if not pm_weight_created and (pm_weight_pv.value != "2.1" or pm_weight_pv.units != "g"):
+            pm_weight_pv.value = "2.1"
+            pm_weight_pv.units = "g"
+            pm_weight_pv.save()
+
+        # Component-level defaults: Hamamatsu SiPM length and width.
+        # Same conditional-update pattern as the weight above, so a
+        # pre-existing manually-entered value gets corrected on re-seed
+        # instead of silently surviving.
+        pm_length_pv, pm_length_created = PropertyValue.objects.get_or_create(
+            component=pm, property_type=length_pt, tag="",
+            defaults={"value": "3", "units": "mm"},
+        )
+        if not pm_length_created and (pm_length_pv.value != "3" or pm_length_pv.units != "mm"):
+            pm_length_pv.value = "3"
+            pm_length_pv.units = "mm"
+            pm_length_pv.save()
+
+        pm_width_pv, pm_width_created = PropertyValue.objects.get_or_create(
+            component=pm, property_type=width_pt, tag="",
+            defaults={"value": "3", "units": "mm"},
+        )
+        if not pm_width_created and (pm_width_pv.value != "3" or pm_width_pv.units != "mm"):
+            pm_width_pv.value = "3"
+            pm_width_pv.units = "mm"
+            pm_width_pv.save()
+
         PropertyValue.objects.get_or_create(
             component=crystal, property_type=height_pt, tag="",
             defaults={"value": "2", "units": "cm"},

@@ -3,6 +3,7 @@ CDB web views — server-rendered Django pages.
 URL config: cdb/urls_web.py
 """
 import io
+from itertools import groupby
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
@@ -217,11 +218,29 @@ def component_detail(request, pk):
     user_group_ids = set(request.user.groups.values_list('id', flat=True))
     can_add_instance = bool(comp.owner_group_id) and comp.owner_group_id in user_group_ids
 
+    # Group the Properties panel by units of measurement (e.g. every "g"
+    # property together, every "mm" property together), so related physical
+    # properties read as a set instead of being scattered in whatever order
+    # they were added. Properties with no units (documents, images, links,
+    # unitless text) form their own trailing group. Sort key puts
+    # units-bearing groups first (alphabetically by unit), the no-units
+    # group last, and orders items within a group by property type name for
+    # a stable, predictable layout.
+    sorted_props = sorted(
+        comp.properties.all(),
+        key=lambda pv: (pv.units == '', pv.units, str(pv.property_type)),
+    )
+    prop_groups = [
+        {'units': units, 'items': list(items)}
+        for units, items in groupby(sorted_props, key=lambda pv: pv.units)
+    ]
+
     context = {
         'component':        comp,
         'active_page':      'components',
         'sites':            sites,
         'property_types':   PropertyType.objects.order_by('name'),
+        'prop_groups':      prop_groups,
         'can_add_instance': can_add_instance,
         'locations':        Location.objects.select_related('institution').order_by('name'),
         'form_error':      form_error,
