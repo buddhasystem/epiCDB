@@ -60,6 +60,13 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
     <div class="card">
       <h2>Instance Details</h2>
       <div class="field-group">
+        <div class="field-label">ID</div>
+        <div class="field-value mono" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="word-break:break-all">{{ instance.pk }}</span>
+          <a href="#" class="tag" style="cursor:pointer" onclick="document.getElementById('qr-modal').showModal(); return false;">QR</a>
+        </div>
+      </div>
+      <div class="field-group">
         <div class="field-label">Component</div>
         <div class="field-value"><a href="{% url 'component-detail' instance.component.pk %}">{{ instance.component.name }}</a></div>
       </div>
@@ -226,6 +233,25 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
   {% if open_modal %}
   dlg.showModal();
   {% endif %}
+})();
+</script>
+
+<dialog id="qr-modal" class="modal">
+  <div class="modal-header"><h2>QR Code</h2></div>
+  <div class="modal-body" style="align-items:center;text-align:center">
+    <img src="{% url 'inventory-qr' instance.pk %}" alt="QR code for {{ instance.pk }}" width="200" height="200" style="border-radius:8px">
+    <div class="mono-code" style="word-break:break-all">{{ instance.pk }}</div>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-ghost" onclick="document.getElementById('qr-modal').close()">Close</button>
+  </div>
+</dialog>
+<script>
+(function () {
+  var qrDlg = document.getElementById('qr-modal');
+  qrDlg.addEventListener('click', function (e) {
+    if (e.target === qrDlg) qrDlg.close();
+  });
 })();
 </script>
 {% endblock %}

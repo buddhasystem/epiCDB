@@ -24,6 +24,7 @@ urlpatterns = [
     path("inventory/<str:pk>/",       views_web.inventory_detail, name="inventory-detail"),
     path("inventory/<str:pk>/properties/<str:property_id>/update/",
                                        views_web.inventory_property_update, name="inventory-property-update"),
+    path("inventory/<str:pk>/qr/",    views_web.inventory_qr,     name="inventory-qr"),
     path("designs/",                  views_web.design_list,      name="design-list"),
     path("designs/<str:pk>/",         views_web.design_detail,    name="design-detail"),
     path("designs/<str:pk>/properties/<str:property_id>/update/",

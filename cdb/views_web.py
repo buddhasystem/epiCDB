@@ -2,13 +2,16 @@
 CDB web views — server-rendered Django pages.
 URL config: cdb/urls_web.py
 """
+import io
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
-from django.http import HttpResponseForbidden
+from django.http import HttpResponseForbidden, HttpResponse
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User, Group
 from django.db.models import Q, Count
 from django.core.paginator import Paginator
+import qrcode
 
 from .models import (
     Component, ComponentInstance, Design, DesignElement,
@@ -524,6 +527,20 @@ def inventory_detail(request, pk):
         'open_modal':      bool(form_error),
     }
     return render(request, 'cdb/inventory_detail.html', context)
+
+
+@login_required
+def inventory_qr(request, pk):
+    """PNG QR code encoding this instance's ID, for the "QR" pop-up on the
+    instance detail page. Generated server-side with the `qrcode` package
+    (pure Python + Pillow) -- no network calls, no client-side JS library,
+    so it works the same whether or not the deployment has outbound
+    internet access."""
+    instance = get_object_or_404(ComponentInstance, pk=pk)
+    img = qrcode.make(str(instance.pk), box_size=8, border=2)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    return HttpResponse(buf.getvalue(), content_type='image/png')
 
 
 # ── Designs ───────────────────────────────────────────────────────────────────
