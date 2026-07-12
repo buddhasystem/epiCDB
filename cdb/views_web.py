@@ -1,3 +1,4 @@
+
 """
 CDB web views — server-rendered Django pages.
 URL config: cdb/urls_web.py
@@ -85,11 +86,14 @@ def component_list(request):
             )
             return redirect('component-detail', pk=comp.pk)
 
-    q      = request.GET.get('q', '')
-    system = request.GET.get('system', '')
+    q         = request.GET.get('q', '')
+    system    = request.GET.get('system', '')
+    group     = request.GET.get('group', '')
+    sort      = request.GET.get('sort', '')
+    direction = request.GET.get('dir', 'asc')
 
     qs = Component.objects.select_related(
-        'technical_system', 'owner_group',
+        'technical_system', 'owner_group', 'owner_user',
     ).annotate(instance_count=Count('instances')).order_by('name')
 
     if q:
@@ -99,6 +103,22 @@ def component_list(request):
         )
     if system:
         qs = qs.filter(technical_system__name=system)
+    if group:
+        qs = qs.filter(owner_group__name=group)
+
+    _sort_map = {
+        'name':   'name',
+        'model':  'model_number',
+        'system': 'technical_system__name',
+        'count':  'instance_count',
+        'group':  'owner_group__name',
+        'owner':  'owner_user__username',
+    }
+    if sort in _sort_map:
+        order_field = _sort_map[sort]
+        if direction == 'desc':
+            order_field = '-' + order_field
+        qs = qs.order_by(order_field, 'name')
 
     paginator = Paginator(qs, PAGE_SIZE)
     page_obj  = paginator.get_page(request.GET.get('page'))
@@ -107,7 +127,12 @@ def component_list(request):
         'page_obj':    page_obj,
         'q':           q,
         'system':      system,
+        'group':       group,
+        'sort':        sort,
+        'dir':         direction,
+        'sort_qs':     _qs(request, 'sort', 'dir'),
         'systems':     TechnicalSystem.objects.order_by('name'),
+        'groups':      Group.objects.order_by('name'),
         'query_str':   _qs(request),
         'active_page': 'components',
         'form_error':  form_error,
