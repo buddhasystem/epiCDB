@@ -278,10 +278,13 @@ class Command(BaseCommand):
         )
         log_entry, log_created = LogEntry.objects.get_or_create(
             design=bemc_tower, entry="BEMC Tower Definition added",
-            defaults={"logged_by": crafts},
+            defaults={"logged_by": crafts, "topic": "design"},
         )
         if not log_created and log_entry.logged_by_id != crafts.id:
             log_entry.logged_by = crafts
+            log_entry.save()
+        if not log_created and log_entry.topic != "design":
+            log_entry.topic = "design"
             log_entry.save()
 
         # Backdated record: BTOF-SENSOR-001 was actually added to inventory
