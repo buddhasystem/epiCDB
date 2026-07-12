@@ -53,7 +53,7 @@ lifecycle events across all domains.
 ```
 cdb_project/
 ├── manage.py
-├── cdb_client.py               # Programmatic query client (see below)
+├── cdb.py               # Programmatic query client (see below)
 ├── cdb_project/
 │   ├── settings.py
 │   └── urls.py
