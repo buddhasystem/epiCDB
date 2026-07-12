@@ -60,7 +60,7 @@ try:
     def api_root(request, format=None):
         return Response({
             "groups":         reverse("group-list",        request=request),
-            "institutions":   reverse("institution-list",  request=request),
+            "institutions":   reverse("institution-list-api",  request=request),
             "locations":      reverse("location-list",     request=request),
             "components":     reverse("component-list",    request=request),
             "inventory":      reverse("instance-list",     request=request),

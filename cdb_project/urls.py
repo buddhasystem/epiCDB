@@ -16,7 +16,7 @@ try:
         path("api/",                                     views.api_root,                        name="api-root"),
         path("api/groups/",                              views.GroupListView.as_view(),          name="group-list"),
         path("api/groups/<int:pk>/",                     views.GroupDetailView.as_view(),        name="group-detail"),
-        path("api/institutions/",                        views.InstitutionListView.as_view(),    name="institution-list"),
+        path("api/institutions/",                        views.InstitutionListView.as_view(),    name="institution-list-api"),
         path("api/locations/",                           views.LocationListView.as_view(),       name="location-list"),
         path("api/locations/<str:pk>/",                  views.LocationDetailView.as_view(),     name="location-detail"),
         path("api/locations/<str:pk>/children/",         views.LocationChildrenView.as_view(),   name="location-children"),

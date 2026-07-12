@@ -10,31 +10,31 @@
 </div>
 
 <div class="stats-grid">
-  <div class="stat-card">
+  <a href="{% url 'component-list' %}" class="stat-card">
     <div class="label">Components</div>
     <div class="value">{{ component_count }}</div>
     <div class="sub">Catalog entries</div>
-  </div>
-  <div class="stat-card">
-    <div class="label">Instances</div>
+  </a>
+  <a href="{% url 'inventory-list' %}" class="stat-card">
+    <div class="label">Inventory</div>
     <div class="value">{{ instance_count }}</div>
     <div class="sub">Physical items</div>
-  </div>
-  <div class="stat-card">
+  </a>
+  <a href="{% url 'design-list' %}" class="stat-card">
     <div class="label">Designs</div>
     <div class="value">{{ design_count }}</div>
     <div class="sub">Assemblies</div>
-  </div>
-  <div class="stat-card">
+  </a>
+  <a href="{% url 'log-list' %}" class="stat-card">
     <div class="label">Log Entries</div>
     <div class="value">{{ log_count }}</div>
     <div class="sub">Events recorded</div>
-  </div>
-  <div class="stat-card">
+  </a>
+  <a href="{% url 'institution-list' %}" class="stat-card">
     <div class="label">Institutions</div>
     <div class="value">{{ institution_count }}</div>
     <div class="sub">Collaborating sites</div>
-  </div>
+  </a>
 </div>
 
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
