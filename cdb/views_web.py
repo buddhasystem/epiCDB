@@ -508,6 +508,12 @@ def design_list(request):
 
 @login_required
 def design_detail(request, pk):
+    """Design detail page. Also handles the "Add Property" pop-up form:
+    a POST here (property_type, tag, value, units) creates a design-level
+    PropertyValue. Only members of the design's owner_group may add a
+    property -- the button is hidden from everyone else, and a POST from
+    anyone else is rejected with 403 (same authorization pattern as
+    component_instance_create)."""
     design = get_object_or_404(
         Design.objects.prefetch_related(
             'properties__property_type',
@@ -515,8 +521,49 @@ def design_detail(request, pk):
         ).select_related('owner_group', 'owner_user'),
         pk=pk,
     )
+
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_add_property = bool(design.owner_group_id) and design.owner_group_id in user_group_ids
+
+    form_error = None
+    form_data  = {}
+
+    if request.method == 'POST':
+        if not can_add_property:
+            return HttpResponseForbidden("You don't have permission to add properties to this design.")
+        property_type_id = request.POST.get('property_type') or None
+        tag               = request.POST.get('tag', '').strip()
+        value             = request.POST.get('value', '').strip()
+        units             = request.POST.get('units', '').strip()
+        uploaded_file     = request.FILES.get('file')
+        form_data = {'property_type': property_type_id or '', 'tag': tag, 'value': value, 'units': units}
+
+        if not property_type_id:
+            form_error = 'Property Type is required.'
+        else:
+            pv, created = PropertyValue.objects.get_or_create(
+                design=design, property_type_id=property_type_id, tag=tag,
+                defaults={'value': value, 'units': units, 'file': uploaded_file},
+            )
+            if not created:
+                pv.value = value
+                pv.units = units
+                if uploaded_file:
+                    pv.file = uploaded_file
+                pv.save()
+            return redirect('design-detail', pk=design.pk)
+
     bom_rows = _build_bom(design)
-    context  = {'design': design, 'bom_rows': bom_rows, 'active_page': 'designs'}
+    context  = {
+        'design':            design,
+        'bom_rows':          bom_rows,
+        'active_page':       'designs',
+        'can_add_property':  can_add_property,
+        'property_types':    PropertyType.objects.order_by('name'),
+        'form_error':        form_error,
+        'form_data':         form_data,
+        'open_modal':        bool(form_error),
+    }
     return render(request, 'cdb/design_detail.html', context)
 
 
