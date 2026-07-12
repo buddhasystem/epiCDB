@@ -1,5 +1,6 @@
 """
 Shared Django bootstrap and model accessor used by all domain modules.
+Unchanged from the original client/cdb_client/_bootstrap.py.
 """
 import os, sys, django, django.conf
 
