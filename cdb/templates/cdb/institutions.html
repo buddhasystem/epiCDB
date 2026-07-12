@@ -12,7 +12,13 @@
 {% for inst in institutions %}
 <div class="inst-card">
   <div class="inst-header">
+    {% with first_loc=inst.locations.first %}
+    {% if first_loc %}
+    <a href="{% url 'location-inventory' first_loc.pk %}" class="inst-abbr" title="View inventory at {{ first_loc.name }}">{{ inst.abbreviation|default:inst.name|slice:":3" }}</a>
+    {% else %}
     <div class="inst-abbr">{{ inst.abbreviation|default:inst.name|slice:":3" }}</div>
+    {% endif %}
+    {% endwith %}
     <div class="inst-meta">
       <div class="inst-name">{{ inst.name }}</div>
       <div class="inst-info">

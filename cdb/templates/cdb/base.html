@@ -276,6 +276,11 @@
     border-radius: 8px; display: flex; align-items: center; justify-content: center;
     font-weight: 700; font-size: 14px; flex-shrink: 0;
   }
+  a.inst-abbr {
+    text-decoration: none; cursor: pointer;
+    transition: transform .12s, box-shadow .12s;
+  }
+  a.inst-abbr:hover { transform: scale(1.06); box-shadow: 0 2px 10px rgba(30,34,48,.25); }
   .inst-meta { flex: 1; }
   .inst-name { font-weight: 600; font-size: 14.5px; }
   .inst-info { font-size: 12px; color: var(--muted); margin-top: 2px; }

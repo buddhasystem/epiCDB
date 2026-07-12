@@ -2,6 +2,13 @@
 {% block title %}Inventory at {{ location.name }} -- ePIC CDB{% endblock %}
 
 {% block content %}
+<style>
+.th-sort { cursor:pointer; white-space:nowrap; user-select:none; }
+.th-sort a { color:inherit; text-decoration:none; display:flex; align-items:center; gap:4px; }
+.sort-icon { font-size:10px; opacity:.45; }
+.sort-icon.active { opacity:1; color:var(--accent); }
+</style>
+
 <div class="page-header">
   <div>
     <h1>Inventory at {{ location.name }}</h1>
@@ -14,18 +21,90 @@
   <a href="{% url 'institution-list' %}" class="btn-outline">&#8592; Institutions</a>
 </div>
 
+<form method="get" class="toolbar">
+  <select name="system" class="filter-select">
+    <option value="">All Systems</option>
+    {% for sys in systems %}
+      <option value="{{ sys.name }}" {% if system == sys.name %}selected{% endif %}>{{ sys.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="group" class="filter-select">
+    <option value="">All Groups</option>
+    {% for grp in groups %}
+      <option value="{{ grp.name }}" {% if group == grp.name %}selected{% endif %}>{{ grp.name }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-primary">Search</button>
+  {% if system or group %}<a href="{% url 'location-inventory' location.pk %}" class="btn btn-ghost">Clear</a>{% endif %}
+</form>
+
 {% if instances %}
+{% with csort=sort cdir=dir cqs=sort_qs %}
 <div class="table-wrap">
   <table>
     <thead>
       <tr>
         <th>ID</th>
-        <th>Tag</th>
-        <th>Component</th>
-        <th>System</th>
-        <th>Serial No.</th>
-        <th>Owner</th>
-        <th>Group</th>
+        {% with col="tag" label="Tag" %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}
+            <span class="sort-icon {% if csort == col %}active{% endif %}">
+              {% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}
+            </span>
+          </a>
+        </th>
+        {% endwith %}
+        {% with col="component" label="Component" %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}
+            <span class="sort-icon {% if csort == col %}active{% endif %}">
+              {% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}
+            </span>
+          </a>
+        </th>
+        {% endwith %}
+        {% with col="system" label="System" %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}
+            <span class="sort-icon {% if csort == col %}active{% endif %}">
+              {% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}
+            </span>
+          </a>
+        </th>
+        {% endwith %}
+        {% with col="serial" label="Serial No." %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}
+            <span class="sort-icon {% if csort == col %}active{% endif %}">
+              {% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}
+            </span>
+          </a>
+        </th>
+        {% endwith %}
+        {% with col="owner" label="Owner" %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}
+            <span class="sort-icon {% if csort == col %}active{% endif %}">
+              {% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}
+            </span>
+          </a>
+        </th>
+        {% endwith %}
+        {% with col="group" label="Group" %}
+        <th class="th-sort">
+          <a href="?{{ cqs }}&sort={{ col }}&dir={% if csort == col and cdir == 'asc' %}desc{% else %}asc{% endif %}">
+            {{ label }}
+            <span class="sort-icon {% if csort == col %}active{% endif %}">
+              {% if csort == col %}{% if cdir == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}
+            </span>
+          </a>
+        </th>
+        {% endwith %}
       </tr>
     </thead>
     <tbody>
@@ -43,8 +122,9 @@
     </tbody>
   </table>
 </div>
+{% endwith %}
 <div class="table-footer">{{ instances.count }} item{{ instances.count|pluralize }}</div>
 {% else %}
-<div class="empty">No component instances recorded at this location.</div>
+<div class="empty">No component instances recorded at this location{% if system or group %} matching this filter{% endif %}.</div>
 {% endif %}
 {% endblock %}

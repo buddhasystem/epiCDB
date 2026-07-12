@@ -1,4 +1,3 @@
-
 """
 CDB web views — server-rendered Django pages.
 URL config: cdb/urls_web.py
@@ -19,6 +18,13 @@ from .models import (
 
 PAGE_SIZE = 20
 
+# Selectable page sizes for the Inventory list -- offered via a "per page"
+# dropdown next to the pagination controls. Anything else in the ?per_page=
+# query param (missing, non-numeric, or not one of these) falls back to
+# INVENTORY_DEFAULT_PAGE_SIZE.
+INVENTORY_PAGE_SIZE_CHOICES = [10, 25, 50, 100]
+INVENTORY_DEFAULT_PAGE_SIZE = 25
+
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -28,6 +34,16 @@ def _qs(request, *exclude):
     for key in ('page',) + exclude:
         params.pop(key, None)
     return params.urlencode()
+
+
+def _inventory_page_size(request):
+    """Resolve the Inventory list's page size from ?per_page=, constrained
+    to INVENTORY_PAGE_SIZE_CHOICES."""
+    try:
+        size = int(request.GET.get('per_page', INVENTORY_DEFAULT_PAGE_SIZE))
+    except (TypeError, ValueError):
+        return INVENTORY_DEFAULT_PAGE_SIZE
+    return size if size in INVENTORY_PAGE_SIZE_CHOICES else INVENTORY_DEFAULT_PAGE_SIZE
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -376,7 +392,8 @@ def inventory_list(request):
         f'{k}={v}' for k, v in request.GET.items() if k not in _excl
     )
 
-    paginator = Paginator(qs, PAGE_SIZE)
+    per_page  = _inventory_page_size(request)
+    paginator = Paginator(qs, per_page)
     page_obj  = paginator.get_page(request.GET.get('page'))
 
     context = {
@@ -389,6 +406,8 @@ def inventory_list(request):
         'sort':         sort,
         'dir':          direction,
         'sort_qs':      sort_qs,
+        'per_page':         per_page,
+        'per_page_choices': INVENTORY_PAGE_SIZE_CHOICES,
         'systems':      TechnicalSystem.objects.order_by('name'),
         'groups':       Group.objects.order_by('name'),
         'users':        User.objects.order_by('username'),
@@ -695,7 +714,8 @@ def system_detail(request, pk):
         qs = qs.filter(owner_group__name=group)
     if owner:
         qs = qs.filter(owner_user__username=owner)
-    paginator = Paginator(qs, PAGE_SIZE)
+    per_page  = _inventory_page_size(request)
+    paginator = Paginator(qs, per_page)
     page_obj  = paginator.get_page(request.GET.get('page'))
 
     context = {
@@ -705,6 +725,8 @@ def system_detail(request, pk):
         'system':       system.name,
         'group':        group,
         'owner':        owner,
+        'per_page':         per_page,
+        'per_page_choices': INVENTORY_PAGE_SIZE_CHOICES,
         'page_title':   'Inventory — ' + system.name,
         'locations':    Location.objects.select_related('institution').order_by('name'),
         'systems':      TechnicalSystem.objects.order_by('name'),
@@ -801,15 +823,49 @@ def location_inventory(request, pk):
         Location.objects.select_related('institution', 'parent'),
         pk=pk,
     )
+
+    system    = request.GET.get('system', '')
+    group     = request.GET.get('group', '')
+    sort      = request.GET.get('sort', '')
+    direction = request.GET.get('dir', 'asc')
+
     instances = ComponentInstance.objects.filter(
         location=location,
     ).select_related(
         'component', 'technical_system', 'owner_group', 'owner_user',
-    ).order_by('component__name', 'tag')
+    )
+    if system:
+        instances = instances.filter(technical_system__name=system)
+    if group:
+        instances = instances.filter(owner_group__name=group)
+
+    # Every column but ID is sortable, same convention as inventory_list.
+    _sort_map = {
+        'tag':       'tag',
+        'component': 'component__name',
+        'system':    'technical_system__name',
+        'serial':    'serial_number',
+        'owner':     'owner_user__username',
+        'group':     'owner_group__name',
+    }
+    if sort in _sort_map:
+        order_field = _sort_map[sort]
+        if direction == 'desc':
+            order_field = '-' + order_field
+        instances = instances.order_by(order_field, 'component__name', 'tag')
+    else:
+        instances = instances.order_by('component__name', 'tag')
 
     context = {
-        'location':  location,
-        'instances': instances,
+        'location':    location,
+        'instances':   instances,
+        'system':      system,
+        'group':       group,
+        'sort':        sort,
+        'dir':         direction,
+        'sort_qs':     _qs(request, 'sort', 'dir'),
+        'systems':     TechnicalSystem.objects.order_by('name'),
+        'groups':      Group.objects.order_by('name'),
         'active_page': 'institutions',
     }
     return render(request, 'cdb/location_inventory.html', context)
