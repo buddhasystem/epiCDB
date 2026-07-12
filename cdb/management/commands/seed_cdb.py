@@ -233,6 +233,12 @@ class Command(BaseCommand):
             component=crystal, property_type=width_pt, tag="",
             defaults={"value": "2", "units": "cm"},
         )
+
+        # Component-level default: Hamamatsu SiPM weight.
+        PropertyValue.objects.get_or_create(
+            component=pm, property_type=weight_pt, tag="",
+            defaults={"value": "2.1", "units": "g"},
+        )
         PropertyValue.objects.get_or_create(
             component=crystal, property_type=height_pt, tag="",
             defaults={"value": "2", "units": "cm"},
@@ -251,6 +257,18 @@ class Command(BaseCommand):
             if os.path.exists(photo_path):
                 with open(photo_path, "rb") as f:
                     image_pv.file.save("PbWO4_crystal.jpg", File(f), save=True)
+
+        # Attach the Hamamatsu SiPM's reference photo as an Image-type
+        # property, same idempotent-attach pattern as the crystal's photo
+        # above.
+        pm_image_pv, _ = PropertyValue.objects.get_or_create(
+            component=pm, property_type=image_pt, tag="",
+        )
+        if not pm_image_pv.file:
+            pm_photo_path = os.path.join(settings.BASE_DIR, "assets", "images", "HamamatsuS14160-3010PS.jpg")
+            if os.path.exists(pm_photo_path):
+                with open(pm_photo_path, "rb") as f:
+                    pm_image_pv.file.save("HamamatsuS14160-3010PS.jpg", File(f), save=True)
 
         # One instance overrides the inherited Weight -- this particular
         # crystal was measured slightly lighter than the catalog default.
