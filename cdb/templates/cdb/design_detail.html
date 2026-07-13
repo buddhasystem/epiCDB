@@ -57,28 +57,50 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
     <div class="card">
       <h2>Bill of Materials</h2>
       {% if bom_rows %}
-      <div class="bom-tree">
-        {% for row in bom_rows %}
-        <div class="bom-row">
-          {% for _ in row.indent %}<span class="bom-indent"></span>{% endfor %}
-          <span style="font-size:15px">{% if row.is_design %}📦{% else %}⚙️{% endif %}</span>
-          <span class="bom-name">
-            <strong>{{ row.element.element_name }}</strong>
-            {% if row.element.component %}
-              — <a href="{% url 'component-detail' row.element.component.pk %}" style="color:var(--accent)">{{ row.element.component.name }}</a>
-              {% if row.element.component.model_number %}
-                <span class="mono-code" style="margin-left:4px">{{ row.element.component.model_number }}</span>
-              {% endif %}
-            {% elif row.element.child_design %}
-              — <a href="{% url 'design-detail' row.element.child_design.pk %}" style="color:var(--accent)">{{ row.element.child_design.name }}</a>
-            {% endif %}
-            {% if row.element.installed_instance %}
-              <span class="mono-code" style="margin-left:6px;background:#dcfce7;color:#166534">{% firstof row.element.installed_instance.tag row.element.installed_instance.pk %}</span>
-            {% endif %}
-          </span>
-          <span class="bom-qty">×{{ row.element.quantity }}</span>
-        </div>
-        {% endfor %}
+      <div class="table-wrap" style="margin:0">
+        <table>
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th>Tag</th>
+              <th>Type</th>
+              <th>Quantity</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in bom_rows %}
+            <tr>
+              <td>
+                {% for _ in row.indent %}<span class="bom-indent" style="margin-right:2px"></span>{% endfor %}
+                <strong>{{ row.element.element_name }}</strong>
+                {% if row.element.component %}
+                  — <a href="{% url 'component-detail' row.element.component.pk %}" style="color:var(--accent)">{{ row.element.component.name }}</a>
+                  {% if row.element.component.model_number %}
+                    <span class="mono-code" style="margin-left:4px">{{ row.element.component.model_number }}</span>
+                  {% endif %}
+                {% elif row.element.child_design %}
+                  — <a href="{% url 'design-detail' row.element.child_design.pk %}" style="color:var(--accent)">{{ row.element.child_design.name }}</a>
+                {% endif %}
+              </td>
+              <td>
+                {% if row.row_type == 'instance' %}
+                <a href="{% url 'inventory-detail' row.element.installed_instance.pk %}" class="mono-code" style="background:#dcfce7;color:#166534;text-decoration:none">{% firstof row.element.installed_instance.tag row.element.installed_instance.pk %}</a>
+                {% endif %}
+              </td>
+              <td>
+                {% if row.row_type == 'instance' %}
+                <span class="tag green">Instance</span>
+                {% elif row.row_type == 'child_design' %}
+                <span class="tag purple">Child Design</span>
+                {% else %}
+                <span class="tag gray">Component</span>
+                {% endif %}
+              </td>
+              <td class="bom-qty">×{{ row.element.quantity }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
       {% else %}
       <div class="empty" style="padding:16px 0">No elements in this design</div>

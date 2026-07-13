@@ -316,11 +316,14 @@ class Command(BaseCommand):
         # four readout photosensors.
         bemc_tower, bemc_tower_created = Design.objects.get_or_create(
             name="BEMC tower",
-            defaults={"project": "ePIC", "owner_group": grp["BEMC"],
+            defaults={"project": "ePIC", "owner_group": grp["BEMC"], "owner_user": crafts,
                       "description": "One BEMC tower: a PbWO4 crystal read out by four SiPMs."},
         )
         if not bemc_tower_created and bemc_tower.owner_group_id != grp["BEMC"].id:
             bemc_tower.owner_group = grp["BEMC"]
+            bemc_tower.save()
+        if not bemc_tower_created and bemc_tower.owner_user_id != crafts.id:
+            bemc_tower.owner_user = crafts
             bemc_tower.save()
         DesignElement.objects.get_or_create(
             design=bemc_tower, element_name="Crystal",

@@ -81,27 +81,64 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
         <div class="field-value mono">{{ instance.serial_number|default:"—" }}</div>
       </div>
       <div class="field-group">
-        <div class="field-label">Location</div>
-        <div class="field-value">{{ instance.location|default:"—" }}</div>
-      </div>
-      {% if instance.location.institution %}
-      <div class="field-group">
         <div class="field-label">Institution</div>
-        <div class="field-value">{{ instance.location.institution.name }}</div>
+        <div class="field-value">
+          {% if can_transfer_owner %}
+          <select id="loc-institution-filter" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text);background:var(--surface)">
+            <option value="">— All —</option>
+            {% for inst in institutions %}
+            <option value="{{ inst.pk }}" {% if instance.location.institution_id == inst.pk %}selected{% endif %}>{{ inst.name }}</option>
+            {% endfor %}
+          </select>
+          {% else %}
+            {{ instance.location.institution.name|default:"—" }}
+          {% endif %}
+        </div>
       </div>
-      {% endif %}
+      <div class="field-group">
+        <div class="field-label">Location</div>
+        <div class="field-value">
+          {% if can_transfer_owner %}
+          <form method="post" action="{% url 'inventory-update-location' instance.pk %}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0">
+            {% csrf_token %}
+            <select name="location" id="loc-location-select" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text);background:var(--surface)">
+              <option value="">— None —</option>
+              {% for loc in locations %}
+              <option value="{{ loc.pk }}" data-institution="{{ loc.institution_id|default:'' }}" {% if instance.location_id == loc.pk %}selected{% endif %}>{{ loc.full_path }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-ghost" style="font-size:12.5px;padding:5px 10px">Save</button>
+          </form>
+          {% else %}
+            {{ instance.location|default:"—" }}
+          {% endif %}
+        </div>
+      </div>
       {% if instance.owner_group %}
       <div class="field-group">
         <div class="field-label">Owner Group</div>
         <div class="field-value"><span class="tag gray">{{ instance.owner_group }}</span></div>
       </div>
       {% endif %}
-      {% if instance.owner_user %}
       <div class="field-group">
-        <div class="field-label">Owner</div>
-        <div class="field-value">{{ instance.owner_user.get_full_name|default:instance.owner_user.username }}</div>
+        <div class="field-label">Current Owner</div>
+        <div class="field-value">
+          {% if can_transfer_owner %}
+          <form method="post" action="{% url 'inventory-transfer-owner' instance.pk %}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0">
+            {% csrf_token %}
+            <select name="owner_user" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text);background:var(--surface)">
+              <option value="">— None —</option>
+              {% for u in group_members %}
+              <option value="{{ u.pk }}" {% if instance.owner_user_id == u.pk %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-ghost" style="font-size:12.5px;padding:5px 10px">Save</button>
+          </form>
+          {% else %}
+            {% if instance.owner_user %}{{ instance.owner_user.get_full_name|default:instance.owner_user.username }}{% else %}—{% endif %}
+          {% endif %}
+        </div>
       </div>
-      {% endif %}
       {% if instance.description %}
       <div class="field-group">
         <div class="field-label">Description</div>
@@ -254,4 +291,34 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
   });
 })();
 </script>
+
+{% if can_transfer_owner %}
+<script>
+(function () {
+  // Keep the Location dropdown's visible options in sync with whichever
+  // Institution is selected -- Institution itself is never submitted, it's
+  // purely a client-side filter over the Location list, since every
+  // Location option already carries its own institution via a data
+  // attribute rendered from the server.
+  var instSel = document.getElementById('loc-institution-filter');
+  var locSel  = document.getElementById('loc-location-select');
+  if (!instSel || !locSel) return;
+  var options = Array.prototype.slice.call(locSel.options);
+
+  function applyFilter() {
+    var instId = instSel.value;
+    options.forEach(function (opt) {
+      if (!opt.value) { opt.hidden = false; return; }
+      opt.hidden = !!instId && opt.dataset.institution !== instId;
+    });
+    if (locSel.selectedOptions[0] && locSel.selectedOptions[0].hidden) {
+      locSel.value = '';
+    }
+  }
+
+  instSel.addEventListener('change', applyFilter);
+  applyFilter();
+})();
+</script>
+{% endif %}
 {% endblock %}

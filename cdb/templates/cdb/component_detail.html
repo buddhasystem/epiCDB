@@ -80,6 +80,25 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
       </div>
       {% endif %}
       <div class="field-group">
+        <div class="field-label">Current Owner</div>
+        <div class="field-value">
+          {% if can_transfer_owner %}
+          <form method="post" action="{% url 'component-transfer-owner' component.pk %}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0">
+            {% csrf_token %}
+            <select name="owner_user" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text);background:var(--surface)">
+              <option value="">— None —</option>
+              {% for u in group_members %}
+              <option value="{{ u.pk }}" {% if component.owner_user_id == u.pk %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-ghost" style="font-size:12.5px;padding:5px 10px">Save</button>
+          </form>
+          {% else %}
+            {% if component.owner_user %}{{ component.owner_user.get_full_name|default:component.owner_user.username }}{% else %}—{% endif %}
+          {% endif %}
+        </div>
+      </div>
+      <div class="field-group">
         <div class="field-label">Created</div>
         <div class="field-value">{{ component.created_on|date:"N j, Y" }}</div>
       </div>

@@ -218,6 +218,14 @@ def component_detail(request, pk):
     user_group_ids = set(request.user.groups.values_list('id', flat=True))
     can_add_instance = bool(comp.owner_group_id) and comp.owner_group_id in user_group_ids
 
+    # Same group-membership check gates the "Current Owner" transfer
+    # control -- only members of the component's owner_group may reassign
+    # ownership, and the dropdown only ever lists that group's members.
+    can_transfer_owner = can_add_instance or request.user.is_superuser
+    group_members = (
+        comp.owner_group.user_set.order_by('username') if comp.owner_group_id else User.objects.none()
+    )
+
     # Group the Properties panel by units of measurement (e.g. every "g"
     # property together, every "mm" property together), so related physical
     # properties read as a set instead of being scattered in whatever order
@@ -242,6 +250,8 @@ def component_detail(request, pk):
         'property_types':   PropertyType.objects.order_by('name'),
         'prop_groups':      prop_groups,
         'can_add_instance': can_add_instance,
+        'can_transfer_owner': can_transfer_owner,
+        'group_members':    group_members,
         'locations':        Location.objects.select_related('institution').order_by('name'),
         'form_error':      form_error,
         'form_data':       form_data,
@@ -316,6 +326,37 @@ def component_instance_create(request, pk):
             created_by=request.user,
         )
         return redirect('inventory-detail', pk=instance.pk)
+
+    return redirect('component-detail', pk=comp.pk)
+
+
+@login_required
+def component_transfer_owner(request, pk):
+    """Transfer a component's ownership to another member of its own
+    owner_group, from the "Current Owner" control on the component detail
+    page. Only members of the component's owner_group may initiate a
+    transfer -- same authorization pattern as component_instance_create,
+    enforced with 403 on an unauthorized POST, not just hidden client-side.
+
+    The new owner must themselves belong to the component's owner_group --
+    the dropdown only ever offers group members, but a POST naming someone
+    outside the group is a business-rule violation from an otherwise
+    authorized user, not an authorization breach, so it's silently ignored
+    (component redirects unchanged) rather than rejected with 403."""
+    comp = get_object_or_404(Component, pk=pk)
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_transfer = (
+        (bool(comp.owner_group_id) and comp.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+
+    if request.method == 'POST':
+        if not can_transfer:
+            return HttpResponseForbidden("You don't have permission to change this component's owner.")
+        new_owner_id = request.POST.get('owner_user') or None
+        if new_owner_id and User.objects.filter(pk=new_owner_id, groups=comp.owner_group_id).exists():
+            comp.owner_user_id = new_owner_id
+            comp.save()
 
     return redirect('component-detail', pk=comp.pk)
 
@@ -537,15 +578,88 @@ def inventory_detail(request, pk):
                 pv.save()
             return redirect('inventory-detail', pk=instance.pk)
 
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_transfer_owner = (
+        (bool(instance.owner_group_id) and instance.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+    group_members = (
+        instance.owner_group.user_set.order_by('username') if instance.owner_group_id else User.objects.none()
+    )
+
     context = {
-        'instance':        instance,
-        'active_page':     'inventory',
-        'property_types':  PropertyType.objects.order_by('name'),
+        'instance':            instance,
+        'active_page':         'inventory',
+        'property_types':      PropertyType.objects.order_by('name'),
+        'can_transfer_owner':  can_transfer_owner,
+        'group_members':       group_members,
+        'institutions':        Institution.objects.order_by('name'),
+        'locations':            Location.objects.select_related('institution').order_by('name'),
         'form_error':      form_error,
         'form_data':       form_data,
         'open_modal':      bool(form_error),
     }
     return render(request, 'cdb/inventory_detail.html', context)
+
+
+@login_required
+def inventory_update_location(request, pk):
+    """Move a ComponentInstance to a different Location, from the
+    Institution/Location controls on the instance detail page. Gated by
+    the same group-membership-or-superuser check as ownership transfer.
+    The Institution dropdown is only a client-side filter over the
+    Location list -- Location already carries its own institution FK, so
+    the server only needs to persist the submitted location; there's no
+    way to end up with an institution/location pair that disagree with
+    each other since every option in the list is a real, existing
+    Location row with its own correct institution."""
+    instance = get_object_or_404(ComponentInstance, pk=pk)
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_manage = (
+        (bool(instance.owner_group_id) and instance.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+
+    if request.method == 'POST':
+        if not can_manage:
+            return HttpResponseForbidden("You don't have permission to move this instance.")
+        location_id = request.POST.get('location') or None
+        if location_id:
+            if Location.objects.filter(pk=location_id).exists():
+                instance.location_id = location_id
+                instance.save()
+        else:
+            instance.location_id = None
+            instance.save()
+
+    return redirect('inventory-detail', pk=instance.pk)
+
+
+@login_required
+def inventory_transfer_owner(request, pk):
+    """Transfer a ComponentInstance's ownership to another member of its own
+    owner_group, from the "Current Owner" control on the instance detail
+    page. Same pattern as component_transfer_owner: group members (or any
+    superuser) may initiate a transfer, enforced server-side with 403 on an
+    unauthorized POST; a target user outside the owner_group is a
+    business-rule violation from an otherwise authorized user, not an
+    authorization breach, so it's silently ignored rather than rejected."""
+    instance = get_object_or_404(ComponentInstance, pk=pk)
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_transfer = (
+        (bool(instance.owner_group_id) and instance.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+
+    if request.method == 'POST':
+        if not can_transfer:
+            return HttpResponseForbidden("You don't have permission to change this instance's owner.")
+        new_owner_id = request.POST.get('owner_user') or None
+        if new_owner_id and User.objects.filter(pk=new_owner_id, groups=instance.owner_group_id).exists():
+            instance.owner_user_id = new_owner_id
+            instance.save()
+
+    return redirect('inventory-detail', pk=instance.pk)
 
 
 @login_required
@@ -566,13 +680,35 @@ def inventory_qr(request, pk):
 
 @login_required
 def design_list(request):
-    q = request.GET.get('q', '')
+    q         = request.GET.get('q', '')
+    group     = request.GET.get('group', '')
+    owner     = request.GET.get('owner', '')
+    sort      = request.GET.get('sort', '')
+    direction = request.GET.get('dir', 'asc')
 
-    qs = Design.objects.select_related('owner_group').annotate(
+    qs = Design.objects.select_related('owner_group', 'owner_user').annotate(
         element_count=Count('elements')
-    ).order_by('name')
+    )
     if q:
         qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
+    if group:
+        qs = qs.filter(owner_group__name=group)
+    if owner:
+        qs = qs.filter(owner_user__username=owner)
+
+    _sort_map = {
+        'name':  'name',
+        'count': 'element_count',
+        'group': 'owner_group__name',
+        'owner': 'owner_user__username',
+    }
+    if sort in _sort_map:
+        order_field = _sort_map[sort]
+        if direction == 'desc':
+            order_field = '-' + order_field
+        qs = qs.order_by(order_field, 'name')
+    else:
+        qs = qs.order_by('name')
 
     paginator = Paginator(qs, PAGE_SIZE)
     page_obj  = paginator.get_page(request.GET.get('page'))
@@ -580,6 +716,13 @@ def design_list(request):
     context = {
         'page_obj':    page_obj,
         'q':           q,
+        'group':       group,
+        'owner':       owner,
+        'sort':        sort,
+        'dir':         direction,
+        'sort_qs':     _qs(request, 'sort', 'dir'),
+        'groups':      Group.objects.order_by('name'),
+        'users':       User.objects.order_by('username'),
         'query_str':   _qs(request),
         'active_page': 'designs',
     }
@@ -673,18 +816,31 @@ def design_property_update(request, pk, property_id):
 
 
 def _build_bom(design, depth=0, max_depth=10):
-    """Flat list of BOM rows with depth info for template indentation."""
+    """Flat list of BOM rows with depth info for template indentation.
+
+    Each row carries a 'row_type' of 'child_design' (the element points at
+    another Design), 'instance' (a component element with a specific
+    inventory instance installed), or 'component' (a plain catalog
+    placeholder with no instance installed yet) -- this drives the Type
+    and Tag columns in the BOM table."""
     rows = []
     if depth > max_depth:
         return rows
     for el in DesignElement.objects.filter(design=design).select_related(
         'component', 'child_design', 'installed_instance'
     ):
+        if el.child_design_id is not None:
+            row_type = 'child_design'
+        elif el.installed_instance_id is not None:
+            row_type = 'instance'
+        else:
+            row_type = 'component'
         rows.append({
             'element':   el,
             'depth':     depth,
             'indent':    list(range(depth)),   # iterate in template
             'is_design': el.child_design_id is not None,
+            'row_type':  row_type,
         })
         if el.child_design:
             rows.extend(_build_bom(el.child_design, depth + 1, max_depth))
