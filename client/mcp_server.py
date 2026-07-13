@@ -43,6 +43,7 @@ Setup
     # from the epiCDB project root (next to manage.py):
     DJANGO_SETTINGS_MODULE=cdb_project.settings \
     CDB_PROJECT_ROOT=/path/to/epiCDB \
+    CDB_MCP_PUBLIC_HOST=your-tunnel-hostname.trycloudflare.com \
     python client/mcp_server.py
 """
 from __future__ import annotations
@@ -78,6 +79,7 @@ from cdb_client import CDBClient  # noqa: E402
 from cdb_client.serializers import instance_brief, institution_brief  # noqa: E402
 
 from mcp.server.fastmcp import FastMCP  # noqa: E402
+from mcp.server.transport_security import TransportSecuritySettings  # noqa: E402
 from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
 from starlette.requests import Request  # noqa: E402
 from starlette.responses import JSONResponse, Response  # noqa: E402
@@ -188,6 +190,27 @@ def _record_success(key: str) -> None:
         _lockouts.pop(key, None)
 
 
+# Paths an MCP client is expected to probe WITHOUT credentials, before it
+# knows how (or whether) to authenticate: OAuth Protected Resource Metadata
+# (RFC 9728), OAuth Authorization Server Metadata (RFC 8414), and Dynamic
+# Client Registration (RFC 7591). This server doesn't implement OAuth, so
+# the correct response is Starlette's normal 404 for an undefined route --
+# that 404 is precisely how a spec-compliant client learns "no OAuth here,
+# fall back to another configured auth method" (in our case, the Request
+# headers Basic Auth value set on the connector). Gating these behind Basic
+# Auth turns that harmless, expected 404 into a 401, which reads as a fatal
+# handshake failure instead of "try something else" -- this was observed
+# directly in server logs as the reason a Claude custom connector's
+# "Connect" step failed outright rather than using the configured header.
+_UNAUTHENTICATED_PATHS = {
+    "/.well-known/oauth-protected-resource",
+    "/.well-known/oauth-protected-resource/mcp",
+    "/.well-known/oauth-authorization-server",
+    "/.well-known/oauth-authorization-server/mcp",
+    "/register",
+}
+
+
 class BasicAuthMiddleware(BaseHTTPMiddleware):
     """
     Validates HTTP Basic credentials against Django's User model on every
@@ -195,9 +218,17 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
     via the _current_user contextvar. Unauthenticated or invalid
     credentials get a 401 with a WWW-Authenticate challenge and never
     reach the MCP handler or any tool.
+
+    Exception: paths in _UNAUTHENTICATED_PATHS pass straight through to
+    the app with no credential check, so OAuth discovery/registration
+    probes get a genuine 404 (route not defined) instead of a 401. See the
+    comment on _UNAUTHENTICATED_PATHS for why this distinction matters.
     """
 
     async def dispatch(self, request: Request, call_next):
+        if request.url.path in _UNAUTHENTICATED_PATHS:
+            return await call_next(request)
+
         client_ip = request.client.host if request.client else "unknown"
         auth_header = request.headers.get("authorization", "")
 
@@ -259,6 +290,48 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
 # 4. MCP server + tools
 # ---------------------------------------------------------------------
 mcp = FastMCP("epiCDB")
+
+# The mcp SDK's own DNS-rebinding protection (separate from
+# BasicAuthMiddleware -- this runs inside the SDK's transport layer) only
+# trusts Host headers matching localhost/127.0.0.1 by default. That's the
+# right default for a server normally reached only locally, but it means
+# a public tunnel hostname (ngrok, cloudflared, etc.) gets rejected with
+# "Invalid Host header" before a request ever reaches our own auth check.
+#
+# Since every real request is already gated behind Basic Auth against
+# actual Django credentials, DNS-rebinding protection is largely
+# redundant for this server specifically -- that protection matters most
+# for servers with no other authentication. Rather than disable it
+# outright, explicitly trust the current tunnel hostname, read from an
+# env var so a new `cloudflared` hostname (issued on every restart,
+# since this isn't a named/persistent tunnel) doesn't require editing
+# this file each time -- just set the env var before launching:
+#
+#   CDB_MCP_PUBLIC_HOST=new-vhs-roses-chronicles.trycloudflare.com \
+#   CDB_PROJECT_ROOT=/path/to/epiCDB python client/mcp_server.py
+_PUBLIC_HOST = os.environ.get("CDB_MCP_PUBLIC_HOST")
+_allowed_hosts = ["127.0.0.1:*", "localhost:*"]
+_allowed_origins = [
+    "http://127.0.0.1:*", "http://localhost:*",
+    "https://127.0.0.1:*", "https://localhost:*",
+]
+if _PUBLIC_HOST:
+    _allowed_hosts.append(_PUBLIC_HOST)
+    _allowed_origins.append(f"https://{_PUBLIC_HOST}")
+else:
+    print(
+        "WARNING: CDB_MCP_PUBLIC_HOST is not set. Requests arriving "
+        "through a public tunnel hostname will be rejected with "
+        "'Invalid Host header' by the SDK's DNS-rebinding protection. "
+        "Set CDB_MCP_PUBLIC_HOST to your current tunnel hostname "
+        "(no scheme, e.g. abc123.trycloudflare.com) before launching.",
+        file=sys.stderr,
+    )
+
+mcp.settings.transport_security = TransportSecuritySettings(
+    allowed_hosts=_allowed_hosts,
+    allowed_origins=_allowed_origins,
+)
 
 
 @mcp.tool()

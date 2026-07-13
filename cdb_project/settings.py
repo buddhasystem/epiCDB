@@ -10,8 +10,10 @@ SECRET_KEY = 'django-insecure-w_f-4jto%ot**s#x%z7&t9=ocv=fm_bmqiq)*=cwc(oe5*+g7m
 
 DEBUG = True
 
-ALLOWED_HOSTS = []
-
+ALLOWED_HOSTS = ['wondering-association-thumb-pieces.trycloudflare.com', 'localhost', '127.0.0.1']
+CSRF_TRUSTED_ORIGINS = [
+    "https://*.trycloudflare.com",
+]
 
 # Application definition
 
