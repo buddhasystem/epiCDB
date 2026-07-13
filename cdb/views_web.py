@@ -325,6 +325,16 @@ def component_instance_create(request, pk):
             owner_user=request.user,
             created_by=request.user,
         )
+        LogEntry.objects.create(
+            component_instance=instance,
+            topic='inventory',
+            logged_by=request.user,
+            entry=(
+                f"Instance {instance.tag or instance.pk} of {comp.name} created by "
+                f"{request.user.get_full_name() or request.user.username}. "
+                f"Location: {instance.location or 'unassigned'}."
+            ),
+        )
         return redirect('inventory-detail', pk=instance.pk)
 
     return redirect('component-detail', pk=comp.pk)
@@ -355,8 +365,22 @@ def component_transfer_owner(request, pk):
             return HttpResponseForbidden("You don't have permission to change this component's owner.")
         new_owner_id = request.POST.get('owner_user') or None
         if new_owner_id and User.objects.filter(pk=new_owner_id, groups=comp.owner_group_id).exists():
-            comp.owner_user_id = new_owner_id
-            comp.save()
+            if comp.owner_user_id != int(new_owner_id):
+                old_owner = comp.owner_user
+                new_owner = User.objects.get(pk=new_owner_id)
+                comp.owner_user = new_owner
+                comp.save()
+                LogEntry.objects.create(
+                    component=comp,
+                    topic='other',
+                    logged_by=request.user,
+                    entry=(
+                        f"Ownership of {comp.name} transferred from "
+                        f"{old_owner.get_full_name() or old_owner.username if old_owner else 'unassigned'} to "
+                        f"{new_owner.get_full_name() or new_owner.username} by "
+                        f"{request.user.get_full_name() or request.user.username}."
+                    ),
+                )
 
     return redirect('component-detail', pk=comp.pk)
 
@@ -406,6 +430,16 @@ def inventory_list(request):
                 owner_group_id=group_id,
                 owner_user=request.user,
                 created_by=request.user,
+            )
+            LogEntry.objects.create(
+                component_instance=instance,
+                topic='inventory',
+                logged_by=request.user,
+                entry=(
+                    f"Instance {instance.tag or instance.pk} of {instance.component.name} created by "
+                    f"{request.user.get_full_name() or request.user.username}. "
+                    f"Location: {instance.location or 'unassigned'}."
+                ),
             )
             return redirect('inventory-detail', pk=instance.pk)
 
@@ -544,7 +578,7 @@ def inventory_detail(request, pk):
             'log_entries__logged_by',
         ).select_related(
             'component', 'location', 'location__institution',
-            'owner_group', 'owner_user',
+            'owner_group', 'owner_user', 'technical_system',
         ),
         pk=pk,
     )
@@ -624,13 +658,29 @@ def inventory_update_location(request, pk):
         if not can_manage:
             return HttpResponseForbidden("You don't have permission to move this instance.")
         location_id = request.POST.get('location') or None
+        old_location = instance.location
+        new_location = None
+
         if location_id:
-            if Location.objects.filter(pk=location_id).exists():
+            new_location = Location.objects.filter(pk=location_id).first()
+            if new_location:
                 instance.location_id = location_id
                 instance.save()
         else:
             instance.location_id = None
             instance.save()
+
+        if old_location != new_location:
+            LogEntry.objects.create(
+                component_instance=instance,
+                topic='inventory',
+                logged_by=request.user,
+                entry=(
+                    f"{instance.tag or instance.pk} moved from "
+                    f"{old_location or 'unassigned'} to {new_location or 'unassigned'} by "
+                    f"{request.user.get_full_name() or request.user.username}."
+                ),
+            )
 
     return redirect('inventory-detail', pk=instance.pk)
 
@@ -656,8 +706,22 @@ def inventory_transfer_owner(request, pk):
             return HttpResponseForbidden("You don't have permission to change this instance's owner.")
         new_owner_id = request.POST.get('owner_user') or None
         if new_owner_id and User.objects.filter(pk=new_owner_id, groups=instance.owner_group_id).exists():
-            instance.owner_user_id = new_owner_id
-            instance.save()
+            if instance.owner_user_id != int(new_owner_id):
+                old_owner = instance.owner_user
+                new_owner = User.objects.get(pk=new_owner_id)
+                instance.owner_user = new_owner
+                instance.save()
+                LogEntry.objects.create(
+                    component_instance=instance,
+                    topic='inventory',
+                    logged_by=request.user,
+                    entry=(
+                        f"Ownership of {instance.tag or instance.pk} transferred from "
+                        f"{old_owner.get_full_name() or old_owner.username if old_owner else 'unassigned'} to "
+                        f"{new_owner.get_full_name() or new_owner.username} by "
+                        f"{request.user.get_full_name() or request.user.username}."
+                    ),
+                )
 
     return redirect('inventory-detail', pk=instance.pk)
 
