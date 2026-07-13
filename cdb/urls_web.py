@@ -31,6 +31,8 @@ urlpatterns = [
                                        views_web.inventory_transfer_owner, name="inventory-transfer-owner"),
     path("inventory/<str:pk>/update-location/",
                                        views_web.inventory_update_location, name="inventory-update-location"),
+    path("inventory/<str:pk>/update-identifiers/",
+                                       views_web.inventory_update_identifiers, name="inventory-update-identifiers"),
     path("designs/",                  views_web.design_list,      name="design-list"),
     path("designs/<str:pk>/",         views_web.design_detail,    name="design-detail"),
     path("designs/<str:pk>/properties/<str:property_id>/update/",

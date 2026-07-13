@@ -86,6 +86,40 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
         <div class="field-label">Serial Number</div>
         <div class="field-value mono">{{ instance.serial_number|default:"—" }}</div>
       </div>
+      {% if missing_identifiers and can_transfer_owner %}
+      <div class="field-group" id="id-prompt-banner" style="background:#fef9c3;border-radius:8px;padding:10px 12px;gap:8px;display:flex;flex-direction:column">
+        <div style="font-size:12.5px;color:#713f12">
+          {% if not instance.tag and not instance.serial_number %}
+          This instance has no Tag or Serial Number.
+          {% elif not instance.tag %}
+          This instance has no Tag.
+          {% else %}
+          This instance has no Serial Number.
+          {% endif %}
+          Would you like to fill this in?
+        </div>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="btn btn-primary" style="font-size:12px;padding:5px 10px" onclick="document.getElementById('id-prompt-banner').style.display='none'; document.getElementById('id-fill-form').style.display='flex';">Yes</button>
+          <button type="button" class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="document.getElementById('id-prompt-banner').style.display='none';">No</button>
+        </div>
+      </div>
+      <form method="post" action="{% url 'inventory-update-identifiers' instance.pk %}" id="id-fill-form" style="display:none;flex-direction:column;gap:10px;margin-top:2px">
+        {% csrf_token %}
+        {% if not instance.tag %}
+        <div class="field-group" style="margin:0">
+          <div class="field-label">Tag</div>
+          <input type="text" name="tag" placeholder="e.g. BEMC-CRYSTAL-005" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text);background:var(--surface)">
+        </div>
+        {% endif %}
+        {% if not instance.serial_number %}
+        <div class="field-group" style="margin:0">
+          <div class="field-label">Serial Number</div>
+          <input type="text" name="serial_number" placeholder="e.g. SN-00231" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text);background:var(--surface)">
+        </div>
+        {% endif %}
+        <button type="submit" class="btn btn-ghost" style="font-size:12.5px;padding:5px 10px;align-self:flex-start">Save</button>
+      </form>
+      {% endif %}
       <div class="field-group">
         <div class="field-label">Institution</div>
         <div class="field-value">

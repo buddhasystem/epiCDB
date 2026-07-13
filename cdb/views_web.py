@@ -620,6 +620,7 @@ def inventory_detail(request, pk):
     group_members = (
         instance.owner_group.user_set.order_by('username') if instance.owner_group_id else User.objects.none()
     )
+    missing_identifiers = not instance.tag or not instance.serial_number
 
     context = {
         'instance':            instance,
@@ -629,6 +630,7 @@ def inventory_detail(request, pk):
         'group_members':       group_members,
         'institutions':        Institution.objects.order_by('name'),
         'locations':            Location.objects.select_related('institution').order_by('name'),
+        'missing_identifiers': missing_identifiers,
         'form_error':      form_error,
         'form_data':       form_data,
         'open_modal':      bool(form_error),
@@ -678,6 +680,53 @@ def inventory_update_location(request, pk):
                 entry=(
                     f"{instance.tag or instance.pk} moved from "
                     f"{old_location or 'unassigned'} to {new_location or 'unassigned'} by "
+                    f"{request.user.get_full_name() or request.user.username}."
+                ),
+            )
+
+    return redirect('inventory-detail', pk=instance.pk)
+
+
+@login_required
+def inventory_update_identifiers(request, pk):
+    """Fill in a missing Tag and/or Serial Number for a ComponentInstance,
+    from the "Would you like to fill this in?" prompt shown on the instance
+    detail page when either field is blank. Same group-membership-or-
+    superuser gate as the other instance-management controls.
+
+    Only fields that are currently blank are ever touched -- if a value
+    somehow arrives for a field that's already set (stale form, direct
+    POST), it's ignored rather than overwriting an established identifier.
+    This control exists purely to fill gaps."""
+    instance = get_object_or_404(ComponentInstance, pk=pk)
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_manage = (
+        (bool(instance.owner_group_id) and instance.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+
+    if request.method == 'POST':
+        if not can_manage:
+            return HttpResponseForbidden("You don't have permission to edit this instance.")
+        changes = []
+        if not instance.tag:
+            new_tag = request.POST.get('tag', '').strip()
+            if new_tag:
+                instance.tag = new_tag
+                changes.append(f"Tag set to {new_tag}")
+        if not instance.serial_number:
+            new_serial = request.POST.get('serial_number', '').strip()
+            if new_serial:
+                instance.serial_number = new_serial
+                changes.append(f"Serial Number set to {new_serial}")
+        if changes:
+            instance.save()
+            LogEntry.objects.create(
+                component_instance=instance,
+                topic='inventory',
+                logged_by=request.user,
+                entry=(
+                    f"{'; '.join(changes)} for {instance.tag or instance.pk} by "
                     f"{request.user.get_full_name() or request.user.username}."
                 ),
             )
