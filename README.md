@@ -20,7 +20,7 @@ in a particle physics accelerator or detector project.
    - [Cross-Domain: Properties and Logs](#cross-domain-properties-and-logs)
    - [Ownership](#ownership)
 5. [Django Admin](#django-admin)
-6. [Python Client (`cdb_client.py`)](#python-client-cdb_clientpy)
+6. [Python Client (`cdb_client`)](#python-client-cdb_client)
    - [LocationClient](#locationclient)
    - [CatalogClient](#catalogclient)
    - [InventoryClient](#inventoryclient)
@@ -51,22 +51,27 @@ lifecycle events across all domains.
 ## Project Structure
 
 ```
-cdb_project/
+epiCDB/
 ├── manage.py
-├── cdb.py               # Programmatic query client (see below)
 ├── cdb_project/
 │   ├── settings.py
 │   └── urls.py
-└── cdb/
-    ├── models.py               # All data models
-    ├── admin.py                # Django admin configuration
-    ├── migrations/             # Database migrations
-    │   ├── 0001_initial.py
-    │   ├── 0002_…              # Location country/city fields
-    │   └── 0003_…              # Institution model + Location FK
-    └── management/
-        └── commands/
-            └── seed_cdb.py     # Sample data loader
+├── cdb/
+│   ├── models.py               # All data models
+│   ├── admin.py                # Django admin configuration
+│   ├── migrations/
+│   │   └── 0001_initial.py
+│   └── management/
+│       └── commands/
+│           └── seed_cdb.py     # Sample data loader
+└── client/
+    ├── cdb.py                  # Command-line interface
+    └── cdb_client/             # Programmatic query client (package)
+        ├── client.py           # CDBClient (combined entry point)
+        ├── catalog.py          # CatalogClient
+        ├── inventory.py        # InventoryClient
+        ├── designs.py          # DesignClient
+        └── locations.py        # LocationClient
 ```
 
 ---
@@ -77,8 +82,6 @@ cdb_project/
 
 ```bash
 pip install django
-
-cd cdb_project
 
 # Apply all migrations (creates db.sqlite3):
 python manage.py migrate
@@ -94,21 +97,21 @@ python manage.py runserver
 #   Username: admin   Password: admin
 ```
 
-To use the Python client from the Django shell:
+To use the Python client from the Django shell, add `client/` to the path first:
 
 ```bash
-python manage.py shell
+PYTHONPATH=client python manage.py shell
 ```
 
 ```python
 from cdb_client import CDBClient
 client = CDBClient()
 
-# Find where a component is located
-client.where_is("000-001-003")
+# Find where a component is located (pass a UUID primary key)
+client.where_is("5a2c5c0e-479b-4e2f-a7cb-caea37435506")
 
 # Get a full Bill of Materials
-client.designs.bom("ePIC Tracking System")
+client.designs.bom("BEMC tower")
 ```
 
 ---
@@ -232,6 +235,7 @@ specifies typed behaviour:
 | Handler | Behaviour |
 |---------|-----------|
 | `pdmlink` | Integrates with PDMLink engineering drawing system |
+| `component_design` | Links to a component design document |
 | `traveler_template` | Links to an eTraveler inspection template |
 | `traveler_instance` | Links to a filled-out eTraveler form |
 | `document` | Attach any file |
@@ -246,7 +250,7 @@ ComponentInstance, or Design.
 
 | Field | Description |
 |-------|-------------|
-| `topic` | `installation`, `maintenance`, `inspection`, `repair`, `decommission`, `other` |
+| `topic` | `general` (blank), `installation`, `inventory`, `design`, `maintenance`, `inspection`, `repair`, `decommission`, `other` |
 | `entry` | Free-text log message |
 | `attachment` | Optional file upload |
 | `logged_by` | FK → Django User |
@@ -287,7 +291,7 @@ mirroring the CDB portal's layout:
 
 ---
 
-## Python Client (`cdb_client.py`)
+## Python Client (`cdb_client`)
 
 A standalone query client that wraps Django ORM calls behind a clean API.
 All methods return lazy Django QuerySets (chainable) unless documented as
@@ -297,7 +301,8 @@ returning a plain dict or list.
 
 ```python
 import sys, os
-sys.path.insert(0, "/path/to/cdb_project")
+sys.path.insert(0, "/path/to/epiCDB")          # Django project root
+sys.path.insert(0, "/path/to/epiCDB/client")   # cdb_client package
 os.environ["DJANGO_SETTINGS_MODULE"] = "cdb_project.settings"
 import django; django.setup()
 
@@ -343,25 +348,22 @@ lc.location_tree("BNL")
 ```python
 cc = client.catalog
 
-# Full-text search (name, model number, description)
+# Full-text search (name, alternate name, model number, description)
 cc.search("silicon strip")
 
-# Filter by technical system or function
-cc.by_technical_system("Tracking")
-cc.by_function("SiPM")
+# Filter by technical system or project
+cc.by_technical_system("BTOF-Sensor")
+cc.by_project("ePIC")
 
 # Look up a single component
-cc.get(name="ePIC SVT Silicon Strip Sensor")
-cc.get(model_number="HPK-SVT-01")
+cc.get(name="PbWO4 Crystal")
+cc.get(model_number="PWO-BEMC-01")
 
-# Related data
-cc.sources_for("ePIC SVT Silicon Strip Sensor")    # → QuerySet[ComponentSource]
-cc.properties_for("ePIC SVT Silicon Strip Sensor") # → QuerySet[PropertyValue]
-cc.logs_for("ePIC SVT Silicon Strip Sensor")       # → QuerySet[LogEntry]
-cc.instance_count("ePIC SVT Silicon Strip Sensor") # → int
+# Count physical instances of a component type
+cc.instance_count("PbWO4 Crystal")  # → int
 
 # Full plain-dict summary
-cc.summary("ePIC SVT Silicon Strip Sensor")
+cc.summary("PbWO4 Crystal")
 # Returns: {"id": ..., "name": ..., "sources": [...], "properties": [...], ...}
 ```
 
@@ -461,6 +463,7 @@ client.where_is("5a2c5c0e-479b-4e2f-a7cb-caea37435506")
 
 # Sub-clients
 client.locations   # LocationClient
+client.systems     # SystemClient
 client.catalog     # CatalogClient
 client.inventory   # InventoryClient
 client.designs     # DesignClient
@@ -474,14 +477,14 @@ client.designs     # DesignClient
 
 | Object | Count | Examples |
 |--------|-------|---------|
-| Institutions | 4 | BNL, CERN, FNAL, ANL |
-| Locations | 8 | Building 510/Room 382 (BNL), Clean Room (CERN), MP9/Assembly Bay (FNAL) |
-| Groups | 6 | EPIC_TRK, EPIC_CAL, CTL, DIAG, MED, APSU_VAC |
-| Components | 8 | SVT Strip Sensor, MAPS Pixel Sensor, PbWO₄ Crystal, SiPM, HV Module, … |
-| Instances | 8 | Spread across BNL, CERN, and FNAL |
-| Designs | 4 | SVT Layer 1 Module, EMCal Cell, DAQ Crate, full Tracking System |
-| Property Types | 13 | Strip Pitch, QA Level, QA Inspection Report, PDMLink Drawing, … |
-| Sources | 5 | Hamamatsu, CAEN, Concurrent Technologies, Fermilab In-house, … |
+| Institutions | 4 | BNL, CUA, UIC, UH |
+| Locations | 3 | Storage Room (CUA), Test Lab (UIC), Bldg.510A (BNL) |
+| Groups | 2 | BEMC, BTOF |
+| Components | 4 | PbWO4 Crystal, Hamamatsu S14160-3010PS, AC-LGAD Sensor, FCFDv2 Readout |
+| Instances | 14 | 3 crystals, 4 SiPMs, 2 AC-LGAD sensors, 5 FCFDv2 readout ASICs |
+| Designs | 1 | BEMC tower (1 crystal + 4 SiPMs) |
+| Property Types | 7 | Weight, Datasheet, Timing Constant, Length, Width, Height, Image |
+| Sources | 0 | — |
 
 The seed command is idempotent — running it multiple times will not create
 duplicate records.
@@ -563,7 +566,7 @@ python manage.py seed_cdb
 ## Logging 
 
 Log entries are stored in a single LogEntry table, same table regardless of what the entry is attached to.
-Each row has a topic (General/Installation/Maintenance/Inspection/Repair/Decommission/Other), free-text entry,
+Each row has a topic (General/Installation/Inventory/Design/Maintenance/Inspection/Repair/Decommission/Other), free-text entry,
 an optional attachment file (log_attachments/ under MEDIA_ROOT), who logged it, and a timestamp — and it links
 to exactly one of component, component_instance, or design via nullable foreign keys, all CASCADE, so deleting
 a Component/Instance/Design deletes its logs too.
