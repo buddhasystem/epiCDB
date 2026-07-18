@@ -184,6 +184,12 @@ class Command(BaseCommand):
             loc = storage_room if i % 2 else test_lab
             mkinst(f"BEMC-PM-{i:03d}", pm, loc, crafts, "BEMC", f"HAM-{i:04d}")
 
+        # 12 additional Hamamatsu units, all delivered to CUA / Storage Room --
+        # same tag/serial pattern as the first four (BEMC-PM-NNN / HAM-NNNN),
+        # just continuing the numbering upward.
+        for i in range(5, 17):  # 12 more instances
+            mkinst(f"BEMC-PM-{i:03d}", pm, storage_room, crafts, "BEMC", f"HAM-{i:04d}")
+
         for i in range(1, 3):  # 2 instances
             loc = test_lab if i % 2 else storage_room
             mkinst(f"BTOF-SENSOR-{i:03d}", sensor, loc, gnigmat, "BTOF", f"LGAD-{i:04d}")
