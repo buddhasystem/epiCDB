@@ -43,6 +43,7 @@ urlpatterns = [
     path("designs/<str:pk>/",         views_web.design_detail,    name="design-detail"),
     path("designs/<str:pk>/properties/<str:property_id>/update/",
                                        views_web.design_property_update, name="design-property-update"),
+    path("designs/<str:pk>/delete/",  views_web.design_delete,    name="design-delete"),
     path("designs/<str:pk>/update-location/",
                                        views_web.design_update_location, name="design-update-location"),
     path("designs/<str:pk>/elements/<str:element_id>/assign-instance/",

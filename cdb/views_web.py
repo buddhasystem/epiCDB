@@ -1053,6 +1053,32 @@ def design_property_update(request, pk, property_id):
 
 
 @login_required
+def design_delete(request, pk):
+    """Delete a design entirely, from the "Delete Design" button on its
+    detail page (the button asks for confirmation client-side first).
+    Members of the design's owner_group (or a superuser) may delete; 403
+    otherwise. Elements, slot assignments, properties, and log entries go
+    with it (CASCADE). If this was the only design instantiated from its
+    template, the template automatically becomes editable again -- the lock
+    is simply "does any design based on it exist", so no extra bookkeeping
+    is needed here."""
+    design = get_object_or_404(Design, pk=pk)
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_delete = (
+        (bool(design.owner_group_id) and design.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+
+    if request.method == 'POST':
+        if not can_delete:
+            return HttpResponseForbidden("You don't have permission to delete this design.")
+        design.delete()
+        return redirect('design-list')
+
+    return redirect('design-detail', pk=design.pk)
+
+
+@login_required
 def design_update_location(request, pk):
     """Set (or change) a design's assembly location, from the
     Institution/Location picker on the design detail page. A design belongs
@@ -1278,17 +1304,29 @@ def template_detail(request, pk):
     )
 
     user_group_ids = set(request.user.groups.values_list('id', flat=True))
-    can_edit = (
+    is_member = (
         (bool(template.owner_group_id) and template.owner_group_id in user_group_ids)
         or request.user.is_superuser
     )
+    # Once at least one Design has been instantiated from a template, the
+    # template becomes immutable: those designs were created from a specific
+    # bill of placeholders, and letting the template drift afterwards would
+    # make "instantiated from BEMC tower" mean different things at different
+    # times. Editing tools disappear for everyone; a fresh template with no
+    # designs yet stays fully editable.
+    is_locked = template.designs.exists()
+    can_edit  = is_member and not is_locked
 
     form_error = None
     form_data  = {}
 
     if request.method == 'POST':
-        if not can_edit:
+        if not is_member:
             return HttpResponseForbidden("You don't have permission to edit this template.")
+        if is_locked:
+            # Authorized user, but the template is frozen -- state-based
+            # business rule, not an authorization failure: ignore silently.
+            return redirect('template-detail', pk=template.pk)
         element_name = request.POST.get('element_name', '').strip()
         component_id = request.POST.get('component') or None
         try:
@@ -1315,6 +1353,7 @@ def template_detail(request, pk):
     context = {
         'template':     template,
         'can_edit':     can_edit,
+        'is_locked':    is_locked,
         'components':   Component.objects.order_by('name'),
         'designs_from': template.designs.select_related('owner_user').order_by('name'),
         'form_error':   form_error,
@@ -1336,14 +1375,17 @@ def template_element_update(request, pk, element_id):
     element = get_object_or_404(DesignTemplateElement, pk=element_id, template=template)
 
     user_group_ids = set(request.user.groups.values_list('id', flat=True))
-    can_edit = (
+    is_member = (
         (bool(template.owner_group_id) and template.owner_group_id in user_group_ids)
         or request.user.is_superuser
     )
 
     if request.method == 'POST':
-        if not can_edit:
+        if not is_member:
             return HttpResponseForbidden("You don't have permission to edit this template.")
+        if template.designs.exists():
+            # Template frozen once designs exist -- see template_detail.
+            return redirect('template-detail', pk=template.pk)
         try:
             element.quantity = max(int(request.POST.get('quantity', element.quantity)), 1)
             element.save()
@@ -1363,14 +1405,17 @@ def template_element_delete(request, pk, element_id):
     element = get_object_or_404(DesignTemplateElement, pk=element_id, template=template)
 
     user_group_ids = set(request.user.groups.values_list('id', flat=True))
-    can_edit = (
+    is_member = (
         (bool(template.owner_group_id) and template.owner_group_id in user_group_ids)
         or request.user.is_superuser
     )
 
     if request.method == 'POST':
-        if not can_edit:
+        if not is_member:
             return HttpResponseForbidden("You don't have permission to edit this template.")
+        if template.designs.exists():
+            # Template frozen once designs exist -- see template_detail.
+            return redirect('template-detail', pk=template.pk)
         element.delete()
 
     return redirect('template-detail', pk=template.pk)

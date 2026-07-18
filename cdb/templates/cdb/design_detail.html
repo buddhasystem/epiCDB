@@ -49,6 +49,12 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
       {% if design.owner_group %}<span class="tag gray">{{ design.owner_group }}</span>{% endif %}
     </div>
   </div>
+  {% if can_edit_elements %}
+  <form method="post" action="{% url 'design-delete' design.pk %}" style="margin:0" onsubmit="return confirm('Are you sure you want to delete the design \'{{ design.name|escapejs }}\'? Its bill of materials, installed-instance assignments, properties and log entries will be removed. This cannot be undone.')">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-ghost" style="color:#b91c1c;border-color:#fecaca">Delete Design</button>
+  </form>
+  {% endif %}
 </div>
 
 <div class="detail-layout">
