@@ -229,9 +229,11 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">
         <h2 style="margin:0">Properties</h2>
+        {% if can_edit_properties %}
         <button type="button" class="btn btn-ghost" style="font-size:12.5px;padding:5px 10px" onclick="document.getElementById('add-property-modal').showModal()">
           + Add / Override
         </button>
+        {% endif %}
       </div>
       {% with props=instance.effective_properties %}
       {% if props %}
@@ -251,13 +253,16 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
                 <a href="{{ pv.value }}" target="_blank" rel="noopener" class="prop-link-trunc" title="{{ pv.value }}">{{ pv.value }}</a>
               {% endif %}
               {% if pv.units %}<span style="color:var(--muted);font-size:11px">{{ pv.units }}</span>{% endif %}
-            {% else %}
+            {% elif can_edit_properties %}
               <form method="post" action="{% url 'inventory-property-update' instance.pk pv.pk %}" style="display:flex;gap:6px;align-items:center;margin:0">
                 {% csrf_token %}
                 <input type="text" name="value" value="{{ pv.value }}" placeholder="value" style="width:90px;padding:4px 7px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;color:var(--text);background:var(--surface)">
                 <input type="text" name="units" value="{{ pv.units }}" placeholder="units" style="width:55px;padding:4px 7px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;color:var(--text);background:var(--surface)">
                 <button type="submit" title="Save" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--accent);cursor:pointer;font-size:12px;padding:4px 8px;font-weight:600">Save</button>
               </form>
+            {% else %}
+              <span>{{ pv.value }}</span>
+              {% if pv.units %}<span style="color:var(--muted);font-size:11px">{{ pv.units }}</span>{% endif %}
             {% endif %}
             {% if pv.component_instance_id %}<span class="tag green" style="font-size:10px">instance</span>{% else %}<span class="tag gray" style="font-size:10px">inherited</span>{% endif %}
           </span>
@@ -272,6 +277,7 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
   </div>
 </div>
 
+{% if can_edit_properties %}
 <dialog id="add-property-modal" class="modal">
   <form method="post" action="{% url 'inventory-detail' instance.pk %}" enctype="multipart/form-data">
     {% csrf_token %}
@@ -325,6 +331,7 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
   {% endif %}
 })();
 </script>
+{% endif %}
 
 <dialog id="qr-modal" class="modal">
   <div class="modal-header"><h2>QR Code</h2></div>

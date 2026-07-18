@@ -168,7 +168,10 @@ def component_detail(request, pk):
     """Component detail page. Also handles the "Add Property" pop-up form:
     a POST here (property_type, tag, value, units) creates a component-level
     PropertyValue, which is then inherited by every ComponentInstance of this
-    component that doesn't already override that (property_type, tag) pair."""
+    component that doesn't already override that (property_type, tag) pair.
+    Members of the component's owner_group (or a superuser) may add/edit
+    properties -- 403 on a POST from anyone else, same authorization pattern
+    as the design-level equivalent."""
     comp = get_object_or_404(
         Component.objects.prefetch_related(
             'componentsource_set__source',
@@ -179,10 +182,18 @@ def component_detail(request, pk):
         pk=pk,
     )
 
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_edit_properties = (
+        (bool(comp.owner_group_id) and comp.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+
     form_error = None
     form_data  = {}
 
     if request.method == 'POST':
+        if not can_edit_properties:
+            return HttpResponseForbidden("You don't have permission to add properties to this component.")
         property_type_id = request.POST.get('property_type') or None
         tag               = request.POST.get('tag', '').strip()
         value             = request.POST.get('value', '').strip()
@@ -216,7 +227,6 @@ def component_detail(request, pk):
          if inst.location and inst.location.institution},
         key=str,
     )
-    user_group_ids = set(request.user.groups.values_list('id', flat=True))
     can_add_instance = bool(comp.owner_group_id) and comp.owner_group_id in user_group_ids
 
     # Same group-membership check gates the "Current Owner" transfer
@@ -251,6 +261,7 @@ def component_detail(request, pk):
         'property_types':   PropertyType.objects.order_by('name'),
         'prop_groups':      prop_groups,
         'can_add_instance': can_add_instance,
+        'can_edit_properties': can_edit_properties,
         'can_transfer_owner': can_transfer_owner,
         'group_members':    group_members,
         'locations':        Location.objects.select_related('institution').order_by('name'),
@@ -268,10 +279,20 @@ def component_property_delete(request, pk, property_id):
     through the component it actually belongs to. If the property has an
     attached file, it's removed from storage too -- Django does not delete
     the underlying file automatically when a FileField-holding row is
-    deleted, so leaving this out would silently orphan files on disk."""
+    deleted, so leaving this out would silently orphan files on disk.
+    Members of the component's owner_group (or a superuser) only; 403
+    otherwise -- same authorization check as component_detail's Add
+    Property form."""
     comp = get_object_or_404(Component, pk=pk)
     pv = get_object_or_404(PropertyValue, pk=property_id, component=comp)
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_edit_properties = (
+        (bool(comp.owner_group_id) and comp.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
     if request.method == 'POST':
+        if not can_edit_properties:
+            return HttpResponseForbidden("You don't have permission to delete properties of this component.")
         if pv.file:
             pv.file.delete(save=False)
         pv.delete()
@@ -286,13 +307,23 @@ def component_property_update(request, pk, property_id):
     property that happens to have a file attached) are excluded -- their
     content is managed via file upload in the Add Property modal, not a
     plain text field, so an edit attempt on one of those is silently
-    ignored rather than honoured."""
+    ignored rather than honoured. Members of the component's owner_group
+    (or a superuser) only; 403 otherwise, same authorization check as
+    component_property_delete."""
     comp = get_object_or_404(Component, pk=pk)
     pv = get_object_or_404(PropertyValue, pk=property_id, component=comp)
-    if request.method == 'POST' and pv.property_type.handler not in ('document', 'image') and not pv.file:
-        pv.value = request.POST.get('value', '').strip()
-        pv.units = request.POST.get('units', '').strip()
-        pv.save()
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_edit_properties = (
+        (bool(comp.owner_group_id) and comp.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+    if request.method == 'POST':
+        if not can_edit_properties:
+            return HttpResponseForbidden("You don't have permission to edit properties of this component.")
+        if pv.property_type.handler not in ('document', 'image') and not pv.file:
+            pv.value = request.POST.get('value', '').strip()
+            pv.units = request.POST.get('units', '').strip()
+            pv.save()
     return redirect('component-detail', pk=comp.pk)
 
 
@@ -539,29 +570,39 @@ def inventory_property_update(request, pk, property_id):
 
     Document/Image property types (and any property that happens to have a
     file attached) are excluded, same as the component-level version of
-    this feature."""
+    this feature. Members of the instance's owner_group (or a superuser)
+    only; 403 otherwise -- same authorization pattern as
+    inventory_transfer_owner."""
     instance = get_object_or_404(ComponentInstance, pk=pk)
     pv = get_object_or_404(
         PropertyValue,
         Q(component_instance=instance) | Q(component_id=instance.component_id),
         pk=property_id,
     )
-    if request.method == 'POST' and pv.property_type.handler not in ('document', 'image') and not pv.file:
-        value = request.POST.get('value', '').strip()
-        units = request.POST.get('units', '').strip()
-        if pv.component_instance_id == instance.pk:
-            pv.value = value
-            pv.units = units
-            pv.save()
-        else:
-            override, created = PropertyValue.objects.get_or_create(
-                component_instance=instance, property_type_id=pv.property_type_id, tag=pv.tag,
-                defaults={'value': value, 'units': units},
-            )
-            if not created:
-                override.value = value
-                override.units = units
-                override.save()
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_edit_properties = (
+        (bool(instance.owner_group_id) and instance.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+    if request.method == 'POST':
+        if not can_edit_properties:
+            return HttpResponseForbidden("You don't have permission to edit properties of this instance.")
+        if pv.property_type.handler not in ('document', 'image') and not pv.file:
+            value = request.POST.get('value', '').strip()
+            units = request.POST.get('units', '').strip()
+            if pv.component_instance_id == instance.pk:
+                pv.value = value
+                pv.units = units
+                pv.save()
+            else:
+                override, created = PropertyValue.objects.get_or_create(
+                    component_instance=instance, property_type_id=pv.property_type_id, tag=pv.tag,
+                    defaults={'value': value, 'units': units},
+                )
+                if not created:
+                    override.value = value
+                    override.units = units
+                    override.save()
     return redirect('inventory-detail', pk=instance.pk)
 
 
@@ -572,7 +613,10 @@ def inventory_detail(request, pk):
     instance-level PropertyValue. If its (property_type, tag) matches one
     inherited from the component, it overrides (hides) that default; if not,
     it's simply an additional property on this instance alone. See
-    ComponentInstance.effective_properties()."""
+    ComponentInstance.effective_properties(). Members of the instance's
+    owner_group (or a superuser) may add/override a property -- 403 on a
+    POST from anyone else, same authorization pattern as
+    inventory_transfer_owner."""
     instance = get_object_or_404(
         ComponentInstance.objects.prefetch_related(
             'properties__property_type',
@@ -585,10 +629,18 @@ def inventory_detail(request, pk):
         pk=pk,
     )
 
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_edit_properties = (
+        (bool(instance.owner_group_id) and instance.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+
     form_error = None
     form_data  = {}
 
     if request.method == 'POST':
+        if not can_edit_properties:
+            return HttpResponseForbidden("You don't have permission to add properties to this instance.")
         property_type_id = request.POST.get('property_type') or None
         tag               = request.POST.get('tag', '').strip()
         value             = request.POST.get('value', '').strip()
@@ -614,7 +666,6 @@ def inventory_detail(request, pk):
                 pv.save()
             return redirect('inventory-detail', pk=instance.pk)
 
-    user_group_ids = set(request.user.groups.values_list('id', flat=True))
     can_transfer_owner = (
         (bool(instance.owner_group_id) and instance.owner_group_id in user_group_ids)
         or request.user.is_superuser
@@ -628,6 +679,7 @@ def inventory_detail(request, pk):
         'instance':            instance,
         'active_page':         'inventory',
         'property_types':      PropertyType.objects.order_by('name'),
+        'can_edit_properties': can_edit_properties,
         'can_transfer_owner':  can_transfer_owner,
         'group_members':       group_members,
         'institutions':        Institution.objects.order_by('name'),
@@ -918,10 +970,10 @@ def design_list(request):
 def design_detail(request, pk):
     """Design detail page. Also handles the "Add Property" pop-up form:
     a POST here (property_type, tag, value, units) creates a design-level
-    PropertyValue. Only members of the design's owner_group may add a
-    property -- the button is hidden from everyone else, and a POST from
-    anyone else is rejected with 403 (same authorization pattern as
-    component_instance_create)."""
+    PropertyValue. Members of the design's owner_group (or a superuser) may
+    add a property -- the button is hidden from everyone else, and a POST
+    from anyone else is rejected with 403 (same authorization pattern as
+    design_delete etc.)."""
     design = get_object_or_404(
         Design.objects.prefetch_related(
             'properties__property_type',
@@ -932,7 +984,10 @@ def design_detail(request, pk):
     )
 
     user_group_ids = set(request.user.groups.values_list('id', flat=True))
-    can_add_property = bool(design.owner_group_id) and design.owner_group_id in user_group_ids
+    can_add_property = (
+        (bool(design.owner_group_id) and design.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
 
     form_error = None
     form_data  = {}
@@ -971,7 +1026,8 @@ def design_detail(request, pk):
     # edited on their own design's page. Available instances are fetched in
     # one query and grouped by component so each editable row gets its own
     # dropdown without a per-row query.
-    can_edit_elements = can_add_property or request.user.is_superuser
+    # can_add_property already includes the superuser bypass.
+    can_edit_elements = can_add_property
 
     # A design is assembled in exactly one place, so all its instances must
     # come from the same location. Until the design's assembly location is
@@ -1031,17 +1087,20 @@ def design_detail(request, pk):
 @login_required
 def design_property_update(request, pk, property_id):
     """Inline-edit a design property's value/units from the Properties
-    panel. property_id is scoped to design=pk. Only members of the
-    design's owner_group may edit -- same authorization check as adding a
-    property; a POST from anyone else is rejected with 403. Document/Image
-    property types (and any property that happens to have a file attached)
-    are excluded from editing regardless of group membership, same as the
-    component-level version of this feature."""
+    panel. property_id is scoped to design=pk. Members of the design's
+    owner_group (or a superuser) may edit -- same authorization check as
+    adding a property; a POST from anyone else is rejected with 403.
+    Document/Image property types (and any property that happens to have a
+    file attached) are excluded from editing regardless of group
+    membership, same as the component-level version of this feature."""
     design = get_object_or_404(Design, pk=pk)
     pv = get_object_or_404(PropertyValue, pk=property_id, design=design)
 
     user_group_ids = set(request.user.groups.values_list('id', flat=True))
-    can_edit = bool(design.owner_group_id) and design.owner_group_id in user_group_ids
+    can_edit = (
+        (bool(design.owner_group_id) and design.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
 
     if request.method == 'POST':
         if not can_edit:

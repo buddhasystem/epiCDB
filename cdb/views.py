@@ -75,7 +75,10 @@ try:
         queryset         = Group.objects.all()
         serializer_class = GroupSerializer
         filter_backends  = [filters.SearchFilter, filters.OrderingFilter]
-        search_fields    = ["name", "description"]
+        # Django's built-in Group model has only "name" -- no "description"
+        # field -- so that can't be a search field (it broke any request with
+        # ?search=... with a FieldError).
+        search_fields    = ["name"]
         ordering_fields  = ["name"]
 
     class GroupDetailView(generics.RetrieveAPIView):

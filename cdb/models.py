@@ -56,8 +56,14 @@ class Location(models.Model):
     ]
     name          = models.CharField(max_length=128)
     location_type = models.CharField(max_length=16, choices=LOCATION_TYPES, default="room")
+    # Mandatory -- every location is anchored to exactly one institution (see
+    # the class docstring), so this can never be left blank. PROTECT rather
+    # than CASCADE/SET_NULL: deleting an Institution that still has
+    # Locations attached would either silently orphan them (impossible now
+    # that this is required) or wipe out inventory location history, so it's
+    # blocked instead until the locations are reassigned or removed first.
     institution   = models.ForeignKey(
-        Institution, null=True, blank=True, on_delete=models.SET_NULL, related_name="locations"
+        Institution, on_delete=models.PROTECT, related_name="locations"
     )
     parent = models.ForeignKey(
         "self", null=True, blank=True,
@@ -71,7 +77,9 @@ class Location(models.Model):
         super().save(*args, **kwargs)
 
     def full_path(self):
-        """Return slash-separated path: Institution / Building / Room / …"""
+        """Return slash-separated path: Institution / Building / Room / …
+        institution is a required field, so it's always there to anchor
+        the path -- no None-guard needed."""
         parts = []
         node = self
         while node is not None:
@@ -520,8 +528,11 @@ class UserProfile(models.Model):
     """Extends Django's built-in User with CDB-specific attributes."""
     id          = models.CharField(max_length=36, primary_key=True, editable=False)
     user        = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    institution = models.ForeignKey(Institution, null=True, blank=True,
-                                    on_delete=models.SET_NULL, related_name='users')
+    # Mandatory, same reasoning as Location.institution -- a profile's home
+    # institution can't be left blank, and PROTECT blocks deleting an
+    # Institution that users still call home instead of silently orphaning
+    # them.
+    institution = models.ForeignKey(Institution, on_delete=models.PROTECT, related_name='users')
 
     def save(self, *args, **kwargs):
         if not self.id:
