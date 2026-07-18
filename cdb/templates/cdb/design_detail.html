@@ -56,6 +56,35 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
     <!-- BOM -->
     <div class="card">
       <h2>Bill of Materials</h2>
+      {% if can_edit_elements %}
+      {% if needs_location %}
+      <div style="background:#fef9c3;border-radius:8px;padding:10px 12px;margin:10px 0;font-size:12.5px;color:#713f12">
+        A design is assembled in one place. Pick the Institution and Location below first —
+        the placeholder dropdowns will then offer inventory items from that location.
+      </div>
+      {% endif %}
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0 14px">
+        <span style="font-size:12px;font-weight:600;color:var(--muted)">Assembly Location:</span>
+        <select id="design-institution-filter" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text);background:var(--surface)">
+          <option value="">— All Institutions —</option>
+          {% for inst in institutions %}
+          <option value="{{ inst.pk }}" {% if design.location.institution_id == inst.pk %}selected{% endif %}>{{ inst.name }}</option>
+          {% endfor %}
+        </select>
+        <form method="post" action="{% url 'design-update-location' design.pk %}" style="display:flex;gap:6px;align-items:center;margin:0">
+          {% csrf_token %}
+          <select name="location" id="design-location-select" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text);background:var(--surface)">
+            <option value="">— None —</option>
+            {% for loc in locations %}
+            <option value="{{ loc.pk }}" data-institution="{{ loc.institution_id|default:'' }}" {% if design.location_id == loc.pk %}selected{% endif %}>{{ loc.full_path }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-ghost" style="font-size:12.5px;padding:5px 10px">Save</button>
+        </form>
+      </div>
+      {% elif design.location %}
+      <div style="font-size:12.5px;color:var(--muted);margin:8px 0 12px">Assembly Location: <strong>{{ design.location.full_path }}</strong></div>
+      {% endif %}
       {% if bom_rows %}
       <div class="table-wrap" style="margin:0">
         <table>
@@ -83,25 +112,38 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
                 {% endif %}
               </td>
               <td>
-                {% if row.row_type == 'instance' %}
-                <a href="{% url 'inventory-detail' row.element.installed_instance.pk %}" class="mono-code" style="background:#dcfce7;color:#166534;text-decoration:none">{% firstof row.element.installed_instance.tag row.element.installed_instance.pk %}</a>
-                {% endif %}
-                {% if row.editable %}
-                <form method="post" action="{% url 'design-element-assign-instance' design.pk row.element.pk %}" style="display:flex;gap:5px;align-items:center;margin:{% if row.row_type == 'instance' %}6px 0 0{% else %}0{% endif %}">
+                {% for dei in row.installed %}
+                <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
+                  <a href="{% url 'inventory-detail' dei.instance.pk %}" class="mono-code" style="background:#dcfce7;color:#166534;text-decoration:none">{% firstof dei.instance.tag dei.instance.serial_number dei.instance.pk %}</a>
+                  {% if row.editable %}
+                  <form method="post" action="{% url 'design-element-unassign-instance' design.pk row.element.pk %}" style="margin:0">
+                    {% csrf_token %}
+                    <input type="hidden" name="instance" value="{{ dei.instance.pk }}">
+                    <button type="submit" title="Remove — slot back to placeholder" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:0 3px">×</button>
+                  </form>
+                  {% endif %}
+                </div>
+                {% endfor %}
+                {% if row.editable and row.slots_left > 0 %}
+                {% if row.available_instances %}
+                <form method="post" action="{% url 'design-element-assign-instance' design.pk row.element.pk %}" style="display:flex;gap:5px;align-items:center;margin:0">
                   {% csrf_token %}
                   <select name="instance" style="max-width:170px;padding:4px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text);background:var(--surface)">
-                    <option value="">— placeholder —</option>
+                    <option value="">— pick from inventory —</option>
                     {% for inst in row.available_instances %}
-                    <option value="{{ inst.pk }}" {% if row.element.installed_instance_id == inst.pk %}selected{% endif %}>{% firstof inst.tag inst.serial_number inst.pk %}{% if inst.location %} @ {% if inst.location.institution %}{{ inst.location.institution }} / {% endif %}{{ inst.location.name }}{% endif %}</option>
+                    <option value="{{ inst.pk }}">{% firstof inst.tag inst.serial_number inst.pk %}{% if inst.location %} @ {% if inst.location.institution %}{{ inst.location.institution }} / {% endif %}{{ inst.location.name }}{% endif %}</option>
                     {% endfor %}
                   </select>
-                  <button type="submit" title="Assign inventory instance" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--accent);cursor:pointer;font-size:11.5px;padding:4px 8px;font-weight:600">Set</button>
+                  <button type="submit" title="Install into next free slot" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--accent);cursor:pointer;font-size:11.5px;padding:4px 8px;font-weight:600">Add</button>
                 </form>
+                {% else %}
+                <div style="font-size:11.5px;color:var(--muted)">No available items at this location</div>
+                {% endif %}
                 {% endif %}
               </td>
               <td>
                 {% if row.row_type == 'instance' %}
-                <span class="tag green">Instance</span>
+                <span class="tag green">Instance{{ row.installed_count|pluralize }} {{ row.installed_count }}/{{ row.element.quantity }}</span>
                 {% elif row.row_type == 'child_design' %}
                 <span class="tag purple">Child Design</span>
                 {% else %}
@@ -266,6 +308,34 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
   {% if open_modal %}
   dlg.showModal();
   {% endif %}
+})();
+</script>
+{% endif %}
+
+{% if can_edit_elements %}
+<script>
+(function () {
+  // Same client-side cascade as the inventory page: the Institution
+  // dropdown just filters which Locations are visible; only the Location
+  // is ever submitted, and every option carries its own institution.
+  var instSel = document.getElementById('design-institution-filter');
+  var locSel  = document.getElementById('design-location-select');
+  if (!instSel || !locSel) return;
+  var options = Array.prototype.slice.call(locSel.options);
+
+  function applyFilter() {
+    var instId = instSel.value;
+    options.forEach(function (opt) {
+      if (!opt.value) { opt.hidden = false; return; }
+      opt.hidden = !!instId && opt.dataset.institution !== instId;
+    });
+    if (locSel.selectedOptions[0] && locSel.selectedOptions[0].hidden) {
+      locSel.value = '';
+    }
+  }
+
+  instSel.addEventListener('change', applyFilter);
+  applyFilter();
 })();
 </script>
 {% endif %}

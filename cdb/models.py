@@ -433,6 +433,15 @@ class Design(OwnedModel):
         related_name="designs",
         help_text="Template this design was instantiated from, if any.",
     )
+    location    = models.ForeignKey(
+        Location, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="designs",
+        help_text=(
+            "Where this design is being assembled. A design lives in exactly "
+            "one place, so placeholder replacement offers only inventory "
+            "instances stored at this location."
+        ),
+    )
 
     def save(self, *args, **kwargs):
         if not self.id:
@@ -452,7 +461,6 @@ class DesignElement(models.Model):
     element_name       = models.CharField(max_length=128)
     component          = models.ForeignKey(Component,         null=True, blank=True, on_delete=models.SET_NULL, related_name="design_memberships")
     child_design       = models.ForeignKey(Design,            null=True, blank=True, on_delete=models.SET_NULL, related_name="parent_elements")
-    installed_instance = models.ForeignKey(ComponentInstance, null=True, blank=True, on_delete=models.SET_NULL, related_name="installed_at")
     quantity           = models.PositiveIntegerField(default=1)
     description        = models.TextField(blank=True)
 
@@ -470,6 +478,33 @@ class DesignElement(models.Model):
     class Meta:
         ordering = ["element_name"]
         unique_together = [("design", "element_name")]
+
+
+class DesignElementInstance(models.Model):
+    """
+    One physical inventory item installed into one slot of a design element.
+    A DesignElement with quantity N (e.g. "SiPM x 4") accepts up to N of
+    these rows, each pointing at a distinct ComponentInstance -- this is what
+    lets a multiple-quantity placeholder be filled with N separate serialized
+    items instead of a single FK. The same instance can't be installed twice
+    in the same element (unique_together below), and the views additionally
+    keep one instance from being used in two elements of the same design.
+    """
+    id = models.CharField(max_length=36, primary_key=True, editable=False)
+    element  = models.ForeignKey(DesignElement,     on_delete=models.CASCADE, related_name="installed_instances")
+    instance = models.ForeignKey(ComponentInstance, on_delete=models.CASCADE, related_name="design_installations")
+
+    def save(self, *args, **kwargs):
+        if not self.id:
+            self.id = str(uuid.uuid4())
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.element} ← {self.instance}"
+
+    class Meta:
+        ordering = ["instance__tag"]
+        unique_together = [("element", "instance")]
 
 # ---------------------------------------------------------------------------
 # User profile extension

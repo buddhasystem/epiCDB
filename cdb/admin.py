@@ -6,7 +6,8 @@ from .models import (
     TechnicalSystem, Source,
     Component, ComponentSource,
     ComponentInstance,
-    Design, DesignElement,
+    Design, DesignElement, DesignElementInstance,
+    DesignTemplate, DesignTemplateElement,
     UserProfile,
 )
 
@@ -57,8 +58,12 @@ class LocationInline(admin.TabularInline):
 
 class DesignElementInline(admin.TabularInline):
     model = DesignElement; fk_name = "design"; extra = 0
-    fields = ("element_name", "component", "child_design", "installed_instance", "quantity")
+    fields = ("element_name", "component", "child_design", "quantity")
     show_change_link = True
+
+class DesignElementInstanceInline(admin.TabularInline):
+    model = DesignElementInstance; extra = 0
+    fields = ("instance",)
 
 # ── Supporting ────────────────────────────────────────────────────────────────
 
@@ -130,6 +135,28 @@ class ComponentInstanceAdmin(admin.ModelAdmin):
 
 # ── Domain 3: Designs ─────────────────────────────────────────────────────────
 
+class DesignTemplateElementInline(admin.TabularInline):
+    model = DesignTemplateElement; extra = 0
+    fields = ("element_name", "component", "quantity", "description")
+
+
+@admin.register(DesignTemplate)
+class DesignTemplateAdmin(admin.ModelAdmin):
+    list_display    = ("pk", "name", "project", "placeholder_count", "owner_group")
+    list_filter     = ("project", "owner_group")
+    search_fields   = ("name", "description")
+    readonly_fields = ("pk", "created_on", "modified_on")
+    inlines         = [DesignTemplateElementInline]
+    fieldsets = (
+        ("Identity",  {"fields": ("pk", "name", "description", "project")}),
+        ("Ownership", {"fields": ("owner_user", "owner_group", "group_writeable", "created_by", "created_on", "modified_by", "modified_on"), "classes": ("collapse",)}),
+    )
+
+    @admin.display(description="# Placeholders")
+    def placeholder_count(self, obj):
+        return obj.elements.count()
+
+
 @admin.register(Design)
 class DesignAdmin(admin.ModelAdmin):
     list_display    = ("pk", "name", "project", "element_count", "owner_group")
@@ -148,10 +175,10 @@ class DesignAdmin(admin.ModelAdmin):
 
 @admin.register(DesignElement)
 class DesignElementAdmin(admin.ModelAdmin):
-    list_display  = ("pk", "element_name", "design", "element_type_display", "component", "child_design", "installed_instance", "quantity")
+    list_display  = ("pk", "element_name", "design", "element_type_display", "component", "child_design", "quantity")
     list_filter   = ("design",)
     search_fields = ("element_name", "design__name", "component__name")
-    inlines       = [PropertyValueElementInline]
+    inlines       = [PropertyValueElementInline, DesignElementInstanceInline]
 
     @admin.display(description="Type")
     def element_type_display(self, obj):

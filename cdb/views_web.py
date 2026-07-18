@@ -16,7 +16,7 @@ import qrcode
 
 from .models import (
     Component, ComponentInstance, Design, DesignElement,
-    DesignTemplate, DesignTemplateElement,
+    DesignTemplate, DesignTemplateElement, DesignElementInstance,
     Institution, Location, LogEntry, TechnicalSystem, PropertyType, PropertyValue,
 )
 
@@ -925,7 +925,8 @@ def design_detail(request, pk):
         Design.objects.prefetch_related(
             'properties__property_type',
             'log_entries__logged_by',
-        ).select_related('owner_group', 'owner_user'),
+        ).select_related('owner_group', 'owner_user', 'template',
+                         'location', 'location__institution'),
         pk=pk,
     )
 
@@ -970,15 +971,37 @@ def design_detail(request, pk):
     # one query and grouped by component so each editable row gets its own
     # dropdown without a per-row query.
     can_edit_elements = can_add_property or request.user.is_superuser
-    if can_edit_elements:
+
+    # A design is assembled in exactly one place, so all its instances must
+    # come from the same location. Until the design's assembly location is
+    # picked, the per-placeholder instance dropdowns are withheld and the
+    # page prompts for the location instead; once picked, each dropdown
+    # offers only instances of that component stored at that location.
+    has_placeholder_rows = any(
+        row['depth'] == 0 and row['element'].component_id is not None
+        for row in bom_rows
+    )
+    needs_location = can_edit_elements and has_placeholder_rows and design.location_id is None
+
+    if can_edit_elements and design.location_id is not None:
         editable_component_ids = {
             row['element'].component_id for row in bom_rows
             if row['depth'] == 0 and row['element'].component_id is not None
         }
+        # An instance already installed in ANY element of this design can't
+        # be offered again -- one physical item can only sit in one slot.
+        used_instance_ids = set(
+            DesignElementInstance.objects.filter(
+                element__design=design
+            ).values_list('instance_id', flat=True)
+        )
         instances_by_component = {}
         for inst in ComponentInstance.objects.filter(
-            component_id__in=editable_component_ids
-        ).select_related('location', 'location__institution').order_by('tag', 'serial_number'):
+            component_id__in=editable_component_ids,
+            location_id=design.location_id,
+        ).exclude(pk__in=used_instance_ids).select_related(
+            'location', 'location__institution'
+        ).order_by('tag', 'serial_number'):
             instances_by_component.setdefault(inst.component_id, []).append(inst)
         for row in bom_rows:
             if row['depth'] == 0 and row['element'].component_id is not None:
@@ -993,6 +1016,9 @@ def design_detail(request, pk):
         'active_page':       'designs',
         'can_add_property':  can_add_property,
         'can_edit_elements': can_edit_elements,
+        'needs_location':    needs_location,
+        'institutions':      Institution.objects.order_by('name'),
+        'locations':         Location.objects.select_related('institution').order_by('name'),
         'property_types':    PropertyType.objects.order_by('name'),
         'form_error':        form_error,
         'form_data':         form_data,
@@ -1027,6 +1053,49 @@ def design_property_update(request, pk, property_id):
 
 
 @login_required
+def design_update_location(request, pk):
+    """Set (or change) a design's assembly location, from the
+    Institution/Location picker on the design detail page. A design belongs
+    to exactly one location, and this choice constrains which inventory
+    instances the placeholder-replacement dropdowns offer. Members of the
+    design's owner_group (or a superuser) may set it -- 403 otherwise, same
+    pattern as the rest of the design-editing controls."""
+    design = get_object_or_404(Design, pk=pk)
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_edit = (
+        (bool(design.owner_group_id) and design.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+
+    if request.method == 'POST':
+        if not can_edit:
+            return HttpResponseForbidden("You don't have permission to set this design's location.")
+        location_id = request.POST.get('location') or None
+        old_location = design.location
+        new_location = Location.objects.filter(pk=location_id).first() if location_id else None
+
+        if location_id and not new_location:
+            return redirect('design-detail', pk=design.pk)
+
+        if old_location != new_location:
+            design.location = new_location
+            design.save()
+            LogEntry.objects.create(
+                design=design,
+                topic='design',
+                logged_by=request.user,
+                entry=(
+                    f"Assembly location of {design.name} set to "
+                    f"{new_location or 'unassigned'}"
+                    f"{f' (was {old_location})' if old_location else ''} by "
+                    f"{request.user.get_full_name() or request.user.username}."
+                ),
+            )
+
+    return redirect('design-detail', pk=design.pk)
+
+
+@login_required
 def design_element_assign_instance(request, pk, element_id):
     """Replace a component placeholder in a design's Bill of Materials with
     an actual ComponentInstance from the inventory (or clear the assignment
@@ -1052,33 +1121,73 @@ def design_element_assign_instance(request, pk, element_id):
             return HttpResponseForbidden("You don't have permission to edit this design's elements.")
         instance_id = request.POST.get('instance') or None
         if instance_id:
+            # Adding one instance to one of the element's slots. All of these
+            # are business rules the dropdown already respects, so a POST
+            # violating any of them is silently ignored rather than 403'd:
+            #   - the design must have an assembly location picked,
+            #   - the instance must be of the element's own component,
+            #   - it must be stored at the design's assembly location,
+            #   - it must not already occupy a slot anywhere in this design,
+            #   - the element must have a free slot (fewer than `quantity`
+            #     instances installed).
             instance = ComponentInstance.objects.filter(
-                pk=instance_id, component_id=element.component_id
-            ).first()
-            if instance and element.installed_instance_id != instance.pk:
-                element.installed_instance = instance
-                element.save()
+                pk=instance_id, component_id=element.component_id,
+                location_id=design.location_id,
+            ).first() if design.location_id else None
+            already_used = instance and DesignElementInstance.objects.filter(
+                element__design=design, instance=instance
+            ).exists()
+            slots_full = element.installed_instances.count() >= element.quantity
+            if instance and not already_used and not slots_full:
+                DesignElementInstance.objects.create(element=element, instance=instance)
                 LogEntry.objects.create(
                     design=design,
                     topic='design',
                     logged_by=request.user,
                     entry=(
-                        f"Element {element.element_name}: placeholder replaced with inventory "
-                        f"instance {instance.tag or instance.pk} by "
+                        f"Element {element.element_name}: inventory instance "
+                        f"{instance.tag or instance.pk} installed "
+                        f"({element.installed_instances.count()} of {element.quantity}) by "
                         f"{request.user.get_full_name() or request.user.username}."
                     ),
                 )
-        elif element.installed_instance_id is not None:
-            old_instance = element.installed_instance
-            element.installed_instance = None
-            element.save()
+
+    return redirect('design-detail', pk=design.pk)
+
+
+@login_required
+def design_element_unassign_instance(request, pk, element_id):
+    """Remove one installed instance from a design element's slots (the x
+    next to its tag in the BOM), returning that slot to a placeholder. Same
+    authorization as assignment: design owner_group members or superusers,
+    403 otherwise. Naming an instance that isn't installed in this element
+    is silently ignored."""
+    design = get_object_or_404(Design, pk=pk)
+    element = get_object_or_404(DesignElement, pk=element_id, design=design)
+
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_edit = (
+        (bool(design.owner_group_id) and design.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+
+    if request.method == 'POST':
+        if not can_edit:
+            return HttpResponseForbidden("You don't have permission to edit this design's elements.")
+        instance_id = request.POST.get('instance') or None
+        dei = DesignElementInstance.objects.filter(
+            element=element, instance_id=instance_id
+        ).select_related('instance').first() if instance_id else None
+        if dei:
+            removed = dei.instance
+            dei.delete()
             LogEntry.objects.create(
                 design=design,
                 topic='design',
                 logged_by=request.user,
                 entry=(
                     f"Element {element.element_name}: inventory instance "
-                    f"{old_instance.tag or old_instance.pk} unassigned (back to placeholder) by "
+                    f"{removed.tag or removed.pk} removed (slot back to placeholder) by "
                     f"{request.user.get_full_name() or request.user.username}."
                 ),
             )
@@ -1086,32 +1195,219 @@ def design_element_assign_instance(request, pk, element_id):
     return redirect('design-detail', pk=design.pk)
 
 
+@login_required
+def template_list(request):
+    """Design Templates page: browse every template and create new ones via
+    the "New Template" pop-up (name, description, owner group). The owner
+    group is required because templates are group-owned throughout: only
+    members of that group may edit the template or instantiate designs from
+    it. A user may only create a template for a group they belong to
+    (superusers may pick any group); anything else is rejected with 403."""
+    form_error = None
+    form_data  = {}
+
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    if request.user.is_superuser:
+        creatable_groups = Group.objects.order_by('name')
+    else:
+        creatable_groups = Group.objects.filter(id__in=user_group_ids).order_by('name')
+
+    if request.method == 'POST':
+        name        = request.POST.get('name', '').strip()
+        description = request.POST.get('description', '').strip()
+        group_id    = request.POST.get('owner_group') or None
+        form_data   = {'name': name, 'description': description, 'owner_group': group_id or ''}
+
+        allowed_group = group_id and (
+            request.user.is_superuser or int(group_id) in user_group_ids
+        ) and Group.objects.filter(pk=group_id).exists()
+
+        if not name:
+            form_error = 'Name is required.'
+        elif DesignTemplate.objects.filter(name=name).exists():
+            form_error = f'A template named "{name}" already exists.'
+        elif not group_id:
+            form_error = 'Owner group is required.'
+        elif not allowed_group:
+            return HttpResponseForbidden("You can only create templates for a group you belong to.")
+        else:
+            template = DesignTemplate.objects.create(
+                name=name,
+                description=description,
+                owner_group_id=group_id,
+                owner_user=request.user,
+                created_by=request.user,
+            )
+            return redirect('template-detail', pk=template.pk)
+
+    q  = request.GET.get('q', '')
+    qs = DesignTemplate.objects.select_related('owner_group', 'owner_user').annotate(
+        placeholder_count=Count('elements', distinct=True),
+        design_count=Count('designs', distinct=True),
+    ).order_by('name')
+    if q:
+        qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
+
+    paginator = Paginator(qs, PAGE_SIZE)
+    page_obj  = paginator.get_page(request.GET.get('page'))
+
+    context = {
+        'page_obj':     page_obj,
+        'q':            q,
+        'query_str':    _qs(request),
+        'groups':       creatable_groups,
+        'form_error':   form_error,
+        'form_data':    form_data,
+        'open_modal':   bool(form_error),
+        'active_page':  'design-templates',
+    }
+    return render(request, 'cdb/templates_list.html', context)
+
+
+@login_required
+def template_detail(request, pk):
+    """Design Template detail page: the placeholder table plus editing
+    tools. A POST here adds a placeholder (element_name, component,
+    quantity). Members of the template's owner_group (or a superuser) may
+    edit; everyone else sees a read-only view and gets 403 on a direct
+    POST."""
+    template = get_object_or_404(
+        DesignTemplate.objects.select_related('owner_group', 'owner_user')
+                              .prefetch_related('elements__component'),
+        pk=pk,
+    )
+
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_edit = (
+        (bool(template.owner_group_id) and template.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+
+    form_error = None
+    form_data  = {}
+
+    if request.method == 'POST':
+        if not can_edit:
+            return HttpResponseForbidden("You don't have permission to edit this template.")
+        element_name = request.POST.get('element_name', '').strip()
+        component_id = request.POST.get('component') or None
+        try:
+            quantity = max(int(request.POST.get('quantity', 1)), 1)
+        except (TypeError, ValueError):
+            quantity = 1
+        form_data = {'element_name': element_name, 'component': component_id or '', 'quantity': quantity}
+
+        if not element_name:
+            form_error = 'Placeholder name is required.'
+        elif template.elements.filter(element_name=element_name).exists():
+            form_error = f'This template already has a placeholder named "{element_name}".'
+        elif not component_id or not Component.objects.filter(pk=component_id).exists():
+            form_error = 'Please choose a component.'
+        else:
+            DesignTemplateElement.objects.create(
+                template=template,
+                element_name=element_name,
+                component_id=component_id,
+                quantity=quantity,
+            )
+            return redirect('template-detail', pk=template.pk)
+
+    context = {
+        'template':     template,
+        'can_edit':     can_edit,
+        'components':   Component.objects.order_by('name'),
+        'designs_from': template.designs.select_related('owner_user').order_by('name'),
+        'form_error':   form_error,
+        'form_data':    form_data,
+        'open_modal':   bool(form_error),
+        'active_page':  'design-templates',
+    }
+    return render(request, 'cdb/template_detail.html', context)
+
+
+@login_required
+def template_element_update(request, pk, element_id):
+    """Inline-edit a template placeholder's quantity. Owner-group members
+    (or superusers) only; 403 otherwise. Invalid quantities fall back to 1;
+    quantity is the only editable field -- changing what component a
+    placeholder points at is delete-and-recreate, deliberately, so it can't
+    drift silently under designs already instantiated from the template."""
+    template = get_object_or_404(DesignTemplate, pk=pk)
+    element = get_object_or_404(DesignTemplateElement, pk=element_id, template=template)
+
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_edit = (
+        (bool(template.owner_group_id) and template.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+
+    if request.method == 'POST':
+        if not can_edit:
+            return HttpResponseForbidden("You don't have permission to edit this template.")
+        try:
+            element.quantity = max(int(request.POST.get('quantity', element.quantity)), 1)
+            element.save()
+        except (TypeError, ValueError):
+            pass
+
+    return redirect('template-detail', pk=template.pk)
+
+
+@login_required
+def template_element_delete(request, pk, element_id):
+    """Remove a placeholder from a template. Owner-group members (or
+    superusers) only; 403 otherwise. Existing designs instantiated earlier
+    are unaffected -- they own real DesignElement copies, not references to
+    the template's rows."""
+    template = get_object_or_404(DesignTemplate, pk=pk)
+    element = get_object_or_404(DesignTemplateElement, pk=element_id, template=template)
+
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_edit = (
+        (bool(template.owner_group_id) and template.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+
+    if request.method == 'POST':
+        if not can_edit:
+            return HttpResponseForbidden("You don't have permission to edit this template.")
+        element.delete()
+
+    return redirect('template-detail', pk=template.pk)
+
+
 def _build_bom(design, depth=0, max_depth=10):
     """Flat list of BOM rows with depth info for template indentation.
 
     Each row carries a 'row_type' of 'child_design' (the element points at
-    another Design), 'instance' (a component element with a specific
-    inventory instance installed), or 'component' (a plain catalog
-    placeholder with no instance installed yet) -- this drives the Type
-    and Tag columns in the BOM table."""
+    another Design), 'instance' (a component element with at least one
+    inventory instance installed into its slots), or 'component' (a plain
+    catalog placeholder with nothing installed yet). An element with
+    quantity N holds up to N installed instances (DesignElementInstance
+    rows); 'installed' carries them for the Tag column and
+    'installed_count' drives the k/N progress badge."""
     rows = []
     if depth > max_depth:
         return rows
     for el in DesignElement.objects.filter(design=design).select_related(
-        'component', 'child_design', 'installed_instance'
-    ):
+        'component', 'child_design'
+    ).prefetch_related('installed_instances__instance__location__institution'):
+        installed = list(el.installed_instances.all())
         if el.child_design_id is not None:
             row_type = 'child_design'
-        elif el.installed_instance_id is not None:
+        elif installed:
             row_type = 'instance'
         else:
             row_type = 'component'
         rows.append({
-            'element':   el,
-            'depth':     depth,
-            'indent':    list(range(depth)),   # iterate in template
-            'is_design': el.child_design_id is not None,
-            'row_type':  row_type,
+            'element':         el,
+            'depth':           depth,
+            'indent':          list(range(depth)),   # iterate in template
+            'is_design':       el.child_design_id is not None,
+            'row_type':        row_type,
+            'installed':       installed,
+            'installed_count': len(installed),
+            'slots_left':      max(el.quantity - len(installed), 0),
         })
         if el.child_design:
             rows.extend(_build_bom(el.child_design, depth + 1, max_depth))
