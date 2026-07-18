@@ -3,6 +3,29 @@
 
 {% block content %}
 <style>
+dialog.modal {
+  border: none; border-radius: 12px; padding: 0;
+  box-shadow: 0 10px 40px rgba(30,34,48,.18);
+  width: 100%; max-width: 420px;
+}
+dialog.modal::backdrop { background: rgba(20,23,34,.45); }
+.modal-header { padding: 18px 22px 14px; border-bottom: 1px solid var(--border); }
+.modal-header h2 { font-size: 16px; font-weight: 700; }
+.modal-body { padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; }
+.modal-footer { padding: 14px 22px 20px; display: flex; justify-content: flex-end; gap: 10px; }
+.modal-field label {
+  display: block; font-size: 12px; font-weight: 600; color: var(--muted);
+  margin-bottom: 5px;
+}
+.modal-field input, .modal-field select {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 8px; font-size: 13.5px; color: var(--text); background: var(--surface);
+}
+.modal-field input:focus, .modal-field select:focus { outline: none; border-color: var(--accent); }
+.modal-error {
+  background: #fee2e2; color: #991b1b; border-radius: 8px;
+  padding: 9px 12px; font-size: 12.5px;
+}
 .th-sort { cursor:pointer; white-space:nowrap; user-select:none; }
 .th-sort a { color:inherit; text-decoration:none; display:flex; align-items:center; gap:4px; }
 .sort-icon { font-size:10px; opacity:.45; }
@@ -14,6 +37,11 @@
     <h1>Designs &amp; Bill of Materials</h1>
     <div class="page-subtitle">Named assemblies and sub-assembly hierarchies</div>
   </div>
+  {% if templates %}
+  <button type="button" class="btn btn-primary" onclick="document.getElementById('from-template-modal').showModal()">
+    + New from Template
+  </button>
+  {% endif %}
 </div>
 
 <form method="get" class="toolbar">
@@ -103,5 +131,49 @@
     {% else %}<span class="disabled">Next →</span>{% endif %}
   </div>
 </div>
+{% endif %}
+
+{% if templates %}
+<dialog id="from-template-modal" class="modal">
+  <form method="post" action="{% url 'design-list' %}">
+    {% csrf_token %}
+    <div class="modal-header"><h2>New Design from Template</h2></div>
+    <div class="modal-body">
+      {% if form_error %}<div class="modal-error">{{ form_error }}</div>{% endif %}
+      <div class="modal-field">
+        <label for="ft-template">Template *</label>
+        <select id="ft-template" name="template" required>
+          <option value="">—</option>
+          {% for tpl in templates %}
+          <option value="{{ tpl.pk }}" {% if form_data.template == tpl.pk %}selected{% endif %}>{{ tpl.name }} ({{ tpl.elements.all|length }} placeholder{{ tpl.elements.all|length|pluralize }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="modal-field">
+        <label for="ft-name">New Design Name *</label>
+        <input type="text" id="ft-name" name="name" value="{{ form_data.name|default:'' }}" placeholder="e.g. BEMC tower #2" required>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin:0">
+        The new design starts with the template's component placeholders; you can then
+        replace each placeholder with an actual inventory item on the design's page.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost" onclick="document.getElementById('from-template-modal').close()">Cancel</button>
+      <button type="submit" class="btn btn-primary">Create</button>
+    </div>
+  </form>
+</dialog>
+<script>
+(function () {
+  var dlg = document.getElementById('from-template-modal');
+  dlg.addEventListener('click', function (e) {
+    if (e.target === dlg) dlg.close();
+  });
+  {% if open_modal %}
+  dlg.showModal();
+  {% endif %}
+})();
+</script>
 {% endif %}
 {% endblock %}

@@ -37,6 +37,8 @@ urlpatterns = [
     path("designs/<str:pk>/",         views_web.design_detail,    name="design-detail"),
     path("designs/<str:pk>/properties/<str:property_id>/update/",
                                        views_web.design_property_update, name="design-property-update"),
+    path("designs/<str:pk>/elements/<str:element_id>/assign-instance/",
+                                       views_web.design_element_assign_instance, name="design-element-assign-instance"),
     path("systems/",                  views_web.system_list,      name="system-list"),
     path("systems/<str:pk>/",         views_web.system_detail,    name="system-detail"),
     path("institutions/",             views_web.institution_list, name="institution-list"),

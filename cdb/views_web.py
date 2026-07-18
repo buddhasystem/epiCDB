@@ -16,6 +16,7 @@ import qrcode
 
 from .models import (
     Component, ComponentInstance, Design, DesignElement,
+    DesignTemplate, DesignTemplateElement,
     Institution, Location, LogEntry, TechnicalSystem, PropertyType, PropertyValue,
 )
 
@@ -793,6 +794,72 @@ def inventory_qr(request, pk):
 
 @login_required
 def design_list(request):
+    """List/search designs. Also handles the "New from Template" pop-up
+    form: a POST here (template, name) instantiates a DesignTemplate into a
+    real Design -- one DesignElement per template placeholder, ready to have
+    its placeholders replaced with actual inventory instances on the design
+    detail page. Only members of the template's owner_group (or a superuser)
+    may instantiate it; the dropdown only offers those templates, and the
+    server enforces the same rule with 403 on a direct POST. On validation
+    failure the list re-renders with the modal reopened and values kept."""
+    form_error = None
+    form_data  = {}
+
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    if request.user.is_superuser:
+        usable_templates = DesignTemplate.objects.prefetch_related('elements').order_by('name')
+    else:
+        usable_templates = DesignTemplate.objects.filter(
+            owner_group_id__in=user_group_ids
+        ).prefetch_related('elements').order_by('name')
+
+    if request.method == 'POST':
+        template_id = request.POST.get('template') or None
+        name        = request.POST.get('name', '').strip()
+        form_data   = {'template': template_id or '', 'name': name}
+
+        template = DesignTemplate.objects.filter(pk=template_id).first() if template_id else None
+        can_instantiate = template is not None and (
+            request.user.is_superuser
+            or (bool(template.owner_group_id) and template.owner_group_id in user_group_ids)
+        )
+
+        if not template:
+            form_error = 'Please choose a template.'
+        elif not can_instantiate:
+            return HttpResponseForbidden("You don't have permission to instantiate this template.")
+        elif not name:
+            form_error = 'Design name is required.'
+        elif Design.objects.filter(name=name).exists():
+            form_error = f'A design named "{name}" already exists.'
+        else:
+            design = Design.objects.create(
+                name=name,
+                description=template.description,
+                project=template.project,
+                template=template,
+                owner_group=template.owner_group,
+                owner_user=request.user,
+            )
+            for el in template.elements.all():
+                DesignElement.objects.create(
+                    design=design,
+                    element_name=el.element_name,
+                    component=el.component,
+                    quantity=el.quantity,
+                    description=el.description,
+                )
+            LogEntry.objects.create(
+                design=design,
+                topic='design',
+                logged_by=request.user,
+                entry=(
+                    f"Design {design.name} created from template {template.name} by "
+                    f"{request.user.get_full_name() or request.user.username}."
+                ),
+            )
+            return redirect('design-detail', pk=design.pk)
+
     q         = request.GET.get('q', '')
     group     = request.GET.get('group', '')
     owner     = request.GET.get('owner', '')
@@ -837,6 +904,10 @@ def design_list(request):
         'groups':      Group.objects.order_by('name'),
         'users':       User.objects.order_by('username'),
         'query_str':   _qs(request),
+        'templates':   usable_templates,
+        'form_error':  form_error,
+        'form_data':   form_data,
+        'open_modal':  bool(form_error),
         'active_page': 'designs',
     }
     return render(request, 'cdb/designs.html', context)
@@ -890,11 +961,38 @@ def design_detail(request, pk):
             return redirect('design-detail', pk=design.pk)
 
     bom_rows = _build_bom(design)
+
+    # Placeholder-replacement controls: members of the design's owner_group
+    # (or a superuser) may swap a component placeholder row for an actual
+    # inventory instance of that same component. Only rows belonging to THIS
+    # design are editable -- rows recursed in from child designs must be
+    # edited on their own design's page. Available instances are fetched in
+    # one query and grouped by component so each editable row gets its own
+    # dropdown without a per-row query.
+    can_edit_elements = can_add_property or request.user.is_superuser
+    if can_edit_elements:
+        editable_component_ids = {
+            row['element'].component_id for row in bom_rows
+            if row['depth'] == 0 and row['element'].component_id is not None
+        }
+        instances_by_component = {}
+        for inst in ComponentInstance.objects.filter(
+            component_id__in=editable_component_ids
+        ).select_related('location', 'location__institution').order_by('tag', 'serial_number'):
+            instances_by_component.setdefault(inst.component_id, []).append(inst)
+        for row in bom_rows:
+            if row['depth'] == 0 and row['element'].component_id is not None:
+                row['editable'] = True
+                row['available_instances'] = instances_by_component.get(row['element'].component_id, [])
+            else:
+                row['editable'] = False
+
     context  = {
         'design':            design,
         'bom_rows':          bom_rows,
         'active_page':       'designs',
         'can_add_property':  can_add_property,
+        'can_edit_elements': can_edit_elements,
         'property_types':    PropertyType.objects.order_by('name'),
         'form_error':        form_error,
         'form_data':         form_data,
@@ -925,6 +1023,66 @@ def design_property_update(request, pk, property_id):
             pv.value = request.POST.get('value', '').strip()
             pv.units = request.POST.get('units', '').strip()
             pv.save()
+    return redirect('design-detail', pk=design.pk)
+
+
+@login_required
+def design_element_assign_instance(request, pk, element_id):
+    """Replace a component placeholder in a design's Bill of Materials with
+    an actual ComponentInstance from the inventory (or clear the assignment
+    by submitting an empty value). This is how a template-derived design
+    goes from "needs 4 SiPMs" to "contains these 4 specific SiPMs".
+
+    Members of the design's owner_group (or a superuser) may do this,
+    enforced with 403 on an unauthorized POST. The chosen instance must be
+    an instance of the placeholder's own component -- the dropdown only
+    offers those, so a POST naming any other instance is a business-rule
+    violation from an otherwise authorized user and is silently ignored."""
+    design = get_object_or_404(Design, pk=pk)
+    element = get_object_or_404(DesignElement, pk=element_id, design=design)
+
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_edit = (
+        (bool(design.owner_group_id) and design.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+
+    if request.method == 'POST':
+        if not can_edit:
+            return HttpResponseForbidden("You don't have permission to edit this design's elements.")
+        instance_id = request.POST.get('instance') or None
+        if instance_id:
+            instance = ComponentInstance.objects.filter(
+                pk=instance_id, component_id=element.component_id
+            ).first()
+            if instance and element.installed_instance_id != instance.pk:
+                element.installed_instance = instance
+                element.save()
+                LogEntry.objects.create(
+                    design=design,
+                    topic='design',
+                    logged_by=request.user,
+                    entry=(
+                        f"Element {element.element_name}: placeholder replaced with inventory "
+                        f"instance {instance.tag or instance.pk} by "
+                        f"{request.user.get_full_name() or request.user.username}."
+                    ),
+                )
+        elif element.installed_instance_id is not None:
+            old_instance = element.installed_instance
+            element.installed_instance = None
+            element.save()
+            LogEntry.objects.create(
+                design=design,
+                topic='design',
+                logged_by=request.user,
+                entry=(
+                    f"Element {element.element_name}: inventory instance "
+                    f"{old_instance.tag or old_instance.pk} unassigned (back to placeholder) by "
+                    f"{request.user.get_full_name() or request.user.username}."
+                ),
+            )
+
     return redirect('design-detail', pk=design.pk)
 
 

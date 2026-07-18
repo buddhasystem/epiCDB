@@ -371,11 +371,68 @@ class ComponentInstance(OwnedModel):
 # Domain 3 — Designs
 # ---------------------------------------------------------------------------
 
+class DesignTemplate(OwnedModel):
+    """
+    Reusable blueprint for a Design. Template elements reference catalog
+    Components as *placeholders* -- they say "this assembly needs 4 SiPMs",
+    not "these four specific SiPMs". When a user instantiates a template,
+    a real Design is created with one DesignElement per placeholder; the
+    editing tools on the design detail page then let the owning group
+    replace each placeholder with an actual ComponentInstance from the
+    inventory as the physical assembly is built.
+    """
+    id = models.CharField(max_length=36, primary_key=True, editable=False)
+    name        = models.CharField(max_length=256, unique=True)
+    description = models.TextField(blank=True)
+    project     = models.CharField(max_length=64, blank=True, default="ePIC")
+
+    def save(self, *args, **kwargs):
+        if not self.id:
+            self.id = str(uuid.uuid4())
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ["name"]
+
+
+class DesignTemplateElement(models.Model):
+    """One placeholder line in a DesignTemplate: a catalog Component and a
+    quantity. Deliberately no ComponentInstance reference here -- templates
+    describe what kind of parts an assembly needs, never specific serialized
+    items; those are chosen later on the instantiated Design."""
+    id = models.CharField(max_length=36, primary_key=True, editable=False)
+    template     = models.ForeignKey(DesignTemplate, on_delete=models.CASCADE, related_name="elements")
+    element_name = models.CharField(max_length=128)
+    component    = models.ForeignKey(Component, on_delete=models.CASCADE, related_name="template_memberships")
+    quantity     = models.PositiveIntegerField(default=1)
+    description  = models.TextField(blank=True)
+
+    def save(self, *args, **kwargs):
+        if not self.id:
+            self.id = str(uuid.uuid4())
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.template.name} / {self.element_name}"
+
+    class Meta:
+        ordering = ["element_name"]
+        unique_together = [("template", "element_name")]
+
+
 class Design(OwnedModel):
     id = models.CharField(max_length=36, primary_key=True, editable=False)
     name        = models.CharField(max_length=256, unique=True)
     description = models.TextField(blank=True)
     project     = models.CharField(max_length=64, blank=True, default="ePIC")
+    template    = models.ForeignKey(
+        DesignTemplate, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="designs",
+        help_text="Template this design was instantiated from, if any.",
+    )
 
     def save(self, *args, **kwargs):
         if not self.id:

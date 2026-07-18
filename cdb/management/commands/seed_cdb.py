@@ -26,7 +26,8 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 from cdb.models import (
     Institution, Location, TechnicalSystem, Component, ComponentInstance,
-    UserProfile, PropertyType, PropertyValue, Design, DesignElement, LogEntry,
+    UserProfile, PropertyType, PropertyValue, Design, DesignElement,
+    DesignTemplate, DesignTemplateElement, LogEntry,
 )
 
 
@@ -311,6 +312,30 @@ class Command(BaseCommand):
                 defaults={"value": "0.44", "units": "kg"},
             )
 
+        # DesignTemplate: "BEMC tower" -- reusable blueprint. Its elements
+        # reference catalog Components as placeholders; instantiating it from
+        # the Designs page creates a real Design whose placeholders can then
+        # be replaced with actual inventory instances.
+        tower_tpl, tower_tpl_created = DesignTemplate.objects.get_or_create(
+            name="BEMC tower",
+            defaults={"project": "ePIC", "owner_group": grp["BEMC"], "owner_user": crafts,
+                      "description": "One BEMC tower: a PbWO4 crystal read out by four SiPMs."},
+        )
+        if not tower_tpl_created and tower_tpl.owner_group_id != grp["BEMC"].id:
+            tower_tpl.owner_group = grp["BEMC"]
+            tower_tpl.save()
+        if not tower_tpl_created and tower_tpl.owner_user_id != crafts.id:
+            tower_tpl.owner_user = crafts
+            tower_tpl.save()
+        DesignTemplateElement.objects.get_or_create(
+            template=tower_tpl, element_name="Crystal",
+            defaults={"component": crystal, "quantity": 1},
+        )
+        DesignTemplateElement.objects.get_or_create(
+            template=tower_tpl, element_name="SiPM",
+            defaults={"component": pm, "quantity": 4},
+        )
+
         # Design: "BEMC tower" -- a placeholder assembly referencing catalog
         # items (not specific inventory instances) for one crystal and its
         # four readout photosensors.
@@ -324,6 +349,9 @@ class Command(BaseCommand):
             bemc_tower.save()
         if not bemc_tower_created and bemc_tower.owner_user_id != crafts.id:
             bemc_tower.owner_user = crafts
+            bemc_tower.save()
+        if bemc_tower.template_id != tower_tpl.id:
+            bemc_tower.template = tower_tpl
             bemc_tower.save()
         DesignElement.objects.get_or_create(
             design=bemc_tower, element_name="Crystal",
@@ -370,3 +398,4 @@ class Command(BaseCommand):
             f"Instances:{ComponentInstance.objects.count()}  "
             f"Institutions:{Institution.objects.count()}"
         ))
+    
