@@ -35,6 +35,8 @@ urlpatterns = [
                                        views_web.inventory_update_identifiers, name="inventory-update-identifiers"),
     path("design-templates/",         views_web.template_list,    name="template-list"),
     path("design-templates/<str:pk>/", views_web.template_detail,  name="template-detail"),
+    path("design-templates/<str:pk>/delete/",
+                                       views_web.template_delete,  name="template-delete"),
     path("design-templates/<str:pk>/elements/<str:element_id>/update/",
                                        views_web.template_element_update, name="template-element-update"),
     path("design-templates/<str:pk>/elements/<str:element_id>/delete/",

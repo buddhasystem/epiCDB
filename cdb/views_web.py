@@ -577,6 +577,7 @@ def inventory_detail(request, pk):
         ComponentInstance.objects.prefetch_related(
             'properties__property_type',
             'log_entries__logged_by',
+            'design_installations__element__design',
         ).select_related(
             'component', 'location', 'location__institution',
             'owner_group', 'owner_user', 'technical_system',
@@ -988,12 +989,12 @@ def design_detail(request, pk):
             row['element'].component_id for row in bom_rows
             if row['depth'] == 0 and row['element'].component_id is not None
         }
-        # An instance already installed in ANY element of this design can't
-        # be offered again -- one physical item can only sit in one slot.
+        # A ComponentInstance is a physical inventory item -- it can only be
+        # installed in one design at a time, not just one slot of THIS
+        # design. So exclude any instance already installed anywhere, in any
+        # design, not merely this one.
         used_instance_ids = set(
-            DesignElementInstance.objects.filter(
-                element__design=design
-            ).values_list('instance_id', flat=True)
+            DesignElementInstance.objects.values_list('instance_id', flat=True)
         )
         instances_by_component = {}
         for inst in ComponentInstance.objects.filter(
@@ -1153,7 +1154,9 @@ def design_element_assign_instance(request, pk, element_id):
             #   - the design must have an assembly location picked,
             #   - the instance must be of the element's own component,
             #   - it must be stored at the design's assembly location,
-            #   - it must not already occupy a slot anywhere in this design,
+            #   - it must not already be installed anywhere, in ANY design --
+            #     a physical inventory item can only be physically present
+            #     in one design at a time, not just one slot of this one,
             #   - the element must have a free slot (fewer than `quantity`
             #     instances installed).
             instance = ComponentInstance.objects.filter(
@@ -1161,7 +1164,7 @@ def design_element_assign_instance(request, pk, element_id):
                 location_id=design.location_id,
             ).first() if design.location_id else None
             already_used = instance and DesignElementInstance.objects.filter(
-                element__design=design, instance=instance
+                instance=instance
             ).exists()
             slots_full = element.installed_instances.count() >= element.quantity
             if instance and not already_used and not slots_full:
@@ -1362,6 +1365,37 @@ def template_detail(request, pk):
         'active_page':  'design-templates',
     }
     return render(request, 'cdb/template_detail.html', context)
+
+
+@login_required
+def template_delete(request, pk):
+    """Delete a Design Template entirely, from the "Delete Template" button
+    on its detail page (confirmed client-side first) -- modeled on
+    design_delete. Only possible while the template is unlocked, i.e. no
+    Design has ever been instantiated from it; the button itself is hidden
+    once it's locked (see template_detail's is_locked), and this is the
+    authoritative server-side check, not just a hidden control. Members of
+    the template's owner_group (or a superuser) may delete; 403 otherwise."""
+    template = get_object_or_404(DesignTemplate, pk=pk)
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_delete = (
+        (bool(template.owner_group_id) and template.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+
+    if request.method == 'POST':
+        if not can_delete:
+            return HttpResponseForbidden("You don't have permission to delete this template.")
+        if template.designs.exists():
+            # Locked -- a design exists based on this template. Business-rule
+            # state check, not an authorization failure: ignore silently
+            # rather than 403, same treatment as the other locked-template
+            # POSTs above.
+            return redirect('template-detail', pk=template.pk)
+        template.delete()
+        return redirect('template-list')
+
+    return redirect('template-detail', pk=template.pk)
 
 
 @login_required

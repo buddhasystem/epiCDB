@@ -179,6 +179,19 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
           {% endif %}
         </div>
       </div>
+      {% if instance.design_installations.all %}
+      <div class="field-group">
+        <div class="field-label">Used In Design{{ instance.design_installations.all|length|pluralize }}</div>
+        <div class="field-value">
+          {% for dei in instance.design_installations.all %}
+          <div{% if not forloop.first %} style="margin-top:4px"{% endif %}>
+            <a href="{% url 'design-detail' dei.element.design.pk %}" style="color:var(--accent)">{{ dei.element.design.name }}</a>
+            <span style="color:var(--muted);font-size:12px"> — {{ dei.element.element_name }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
       {% if instance.description %}
       <div class="field-group">
         <div class="field-label">Description</div>

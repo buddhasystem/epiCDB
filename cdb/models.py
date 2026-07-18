@@ -486,13 +486,20 @@ class DesignElementInstance(models.Model):
     A DesignElement with quantity N (e.g. "SiPM x 4") accepts up to N of
     these rows, each pointing at a distinct ComponentInstance -- this is what
     lets a multiple-quantity placeholder be filled with N separate serialized
-    items instead of a single FK. The same instance can't be installed twice
-    in the same element (unique_together below), and the views additionally
-    keep one instance from being used in two elements of the same design.
+    items instead of a single FK.
+
+    `instance` is unique across the whole table, not just per-element: a
+    ComponentInstance is a physical inventory item, and it can only be
+    physically present in one design (in one slot of one element) at a
+    time -- never in two slots, two elements, or two designs at once. This
+    is enforced here at the database level, in addition to the view-level
+    checks that keep it out of the placeholder dropdowns of every OTHER
+    design once it's installed anywhere. Removing it from its element (row
+    deleted) makes it available again everywhere.
     """
     id = models.CharField(max_length=36, primary_key=True, editable=False)
     element  = models.ForeignKey(DesignElement,     on_delete=models.CASCADE, related_name="installed_instances")
-    instance = models.ForeignKey(ComponentInstance, on_delete=models.CASCADE, related_name="design_installations")
+    instance = models.ForeignKey(ComponentInstance, on_delete=models.CASCADE, related_name="design_installations", unique=True)
 
     def save(self, *args, **kwargs):
         if not self.id:
@@ -504,7 +511,6 @@ class DesignElementInstance(models.Model):
 
     class Meta:
         ordering = ["instance__tag"]
-        unique_together = [("element", "instance")]
 
 # ---------------------------------------------------------------------------
 # User profile extension
