@@ -23,12 +23,12 @@ from .models import (
 
 PAGE_SIZE = 20
 
-# Selectable page sizes for the Inventory list -- offered via a "per page"
-# dropdown next to the pagination controls. Anything else in the ?per_page=
-# query param (missing, non-numeric, or not one of these) falls back to
-# INVENTORY_DEFAULT_PAGE_SIZE.
-INVENTORY_PAGE_SIZE_CHOICES = [10, 25, 50, 100]
-INVENTORY_DEFAULT_PAGE_SIZE = 25
+# Selectable page sizes offered via a "per page" dropdown next to the
+# pagination controls, on any list page that opts into it (Inventory,
+# Activity Log, ...). Anything else in the ?per_page= query param (missing,
+# non-numeric, or not one of these) falls back to DEFAULT_PAGE_SIZE.
+PAGE_SIZE_CHOICES = [10, 25, 50, 100]
+DEFAULT_PAGE_SIZE = 25
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -41,14 +41,14 @@ def _qs(request, *exclude):
     return params.urlencode()
 
 
-def _inventory_page_size(request):
-    """Resolve the Inventory list's page size from ?per_page=, constrained
-    to INVENTORY_PAGE_SIZE_CHOICES."""
+def _resolve_page_size(request):
+    """Resolve a list page's page size from ?per_page=, constrained to
+    PAGE_SIZE_CHOICES."""
     try:
-        size = int(request.GET.get('per_page', INVENTORY_DEFAULT_PAGE_SIZE))
+        size = int(request.GET.get('per_page', DEFAULT_PAGE_SIZE))
     except (TypeError, ValueError):
-        return INVENTORY_DEFAULT_PAGE_SIZE
-    return size if size in INVENTORY_PAGE_SIZE_CHOICES else INVENTORY_DEFAULT_PAGE_SIZE
+        return DEFAULT_PAGE_SIZE
+    return size if size in PAGE_SIZE_CHOICES else DEFAULT_PAGE_SIZE
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -521,7 +521,7 @@ def inventory_list(request):
         f'{k}={v}' for k, v in request.GET.items() if k not in _excl
     )
 
-    per_page  = _inventory_page_size(request)
+    per_page  = _resolve_page_size(request)
     paginator = Paginator(qs, per_page)
     page_obj  = paginator.get_page(request.GET.get('page'))
 
@@ -536,7 +536,7 @@ def inventory_list(request):
         'dir':          direction,
         'sort_qs':      sort_qs,
         'per_page':         per_page,
-        'per_page_choices': INVENTORY_PAGE_SIZE_CHOICES,
+        'per_page_choices': PAGE_SIZE_CHOICES,
         'systems':      TechnicalSystem.objects.order_by('name'),
         'groups':       Group.objects.order_by('name'),
         'users':        User.objects.order_by('username'),
@@ -849,7 +849,13 @@ def inventory_delete(request, pk):
     once it's in use (see inventory_detail's is_in_design), and this is the
     authoritative server-side check, not just a hidden control. Members of
     the instance's owner_group (or a superuser) may delete; 403
-    otherwise."""
+    otherwise.
+
+    The deletion is recorded as a LogEntry against the parent Component
+    (not the instance) -- LogEntry.component_instance is on_delete=CASCADE,
+    so a log entry attached only to the instance being deleted would vanish
+    along with it. Logging on the component instead means the record
+    survives and stays visible on the component's own Log Entries panel."""
     instance = get_object_or_404(ComponentInstance, pk=pk)
     user_group_ids = set(request.user.groups.values_list('id', flat=True))
     can_delete = (
@@ -866,6 +872,17 @@ def inventory_delete(request, pk):
             # treatment as the locked-template/locked-design POSTs
             # elsewhere in this file.
             return redirect('inventory-detail', pk=instance.pk)
+        LogEntry.objects.create(
+            component=instance.component,
+            topic='inventory',
+            logged_by=request.user,
+            entry=(
+                f"Instance {instance.tag or instance.pk} of {instance.component.name} "
+                f"(serial {instance.serial_number or 'unassigned'}) deleted from inventory by "
+                f"{request.user.get_full_name() or request.user.username}. "
+                f"Last location: {instance.location or 'unassigned'}."
+            ),
+        )
         instance.delete()
         return redirect('inventory-list')
 
@@ -1654,7 +1671,7 @@ def system_detail(request, pk):
         qs = qs.filter(owner_group__name=group)
     if owner:
         qs = qs.filter(owner_user__username=owner)
-    per_page  = _inventory_page_size(request)
+    per_page  = _resolve_page_size(request)
     paginator = Paginator(qs, per_page)
     page_obj  = paginator.get_page(request.GET.get('page'))
 
@@ -1666,7 +1683,7 @@ def system_detail(request, pk):
         'group':        group,
         'owner':        owner,
         'per_page':         per_page,
-        'per_page_choices': INVENTORY_PAGE_SIZE_CHOICES,
+        'per_page_choices': PAGE_SIZE_CHOICES,
         'page_title':   'Inventory — ' + system.name,
         'locations':    Location.objects.select_related('institution').order_by('name'),
         'systems':      TechnicalSystem.objects.order_by('name'),
@@ -1827,15 +1844,18 @@ def log_list(request):
     if topic:
         qs = qs.filter(topic=topic)
 
-    paginator = Paginator(qs, PAGE_SIZE)
+    per_page  = _resolve_page_size(request)
+    paginator = Paginator(qs, per_page)
     page_obj  = paginator.get_page(request.GET.get('page'))
 
     context = {
-        'page_obj':    page_obj,
-        'q':           q,
-        'topic':       topic,
-        'topics':      LogEntry.TOPIC_CHOICES,
-        'query_str':   _qs(request),
-        'active_page': 'logs',
+        'page_obj':         page_obj,
+        'q':                q,
+        'topic':            topic,
+        'topics':           LogEntry.TOPIC_CHOICES,
+        'per_page':         per_page,
+        'per_page_choices': PAGE_SIZE_CHOICES,
+        'query_str':        _qs(request),
+        'active_page':      'logs',
     }
     return render(request, 'cdb/logs.html', context)
