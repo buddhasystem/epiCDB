@@ -50,9 +50,21 @@ dialog.modal::backdrop { background: rgba(20,23,34,.45); }
       {% if instance.owner_group %}<span class="tag gray" style="margin-left:6px">{{ instance.owner_group }}</span>{% endif %}
     </div>
   </div>
-  <a href="{% url 'component-detail' instance.component.pk %}" class="btn btn-ghost">
-    View Component ↗
-  </a>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    {% if can_delete %}
+      {% if is_in_design %}
+      <span class="tag gray" title="Remove this item from its design before it can be deleted">Assigned to a design — for deletion remove from the design first</span>
+      {% else %}
+      <form method="post" action="{% url 'inventory-delete' instance.pk %}" style="margin:0" onsubmit="return confirm('Are you sure you want to delete {% firstof instance.tag|escapejs instance.pk|escapejs %}? This cannot be undone.')">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost" style="color:#b91c1c;border-color:#fecaca">Delete</button>
+      </form>
+      {% endif %}
+    {% endif %}
+    <a href="{% url 'component-detail' instance.component.pk %}" class="btn btn-ghost">
+      View Component ↗
+    </a>
+  </div>
 </div>
 
 <div class="detail-layout">

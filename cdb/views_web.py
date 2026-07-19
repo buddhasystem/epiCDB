@@ -670,6 +670,13 @@ def inventory_detail(request, pk):
         (bool(instance.owner_group_id) and instance.owner_group_id in user_group_ids)
         or request.user.is_superuser
     )
+    # Same group-membership-or-superuser check gates deletion. Uses the
+    # already-prefetched design_installations list (not .exists(), which
+    # would issue its own query) to decide whether the item is currently
+    # installed in a design -- if so, the Delete control is withheld and a
+    # message points the user at removing it from the design first.
+    can_delete   = can_transfer_owner
+    is_in_design = bool(instance.design_installations.all())
     group_members = (
         instance.owner_group.user_set.order_by('username') if instance.owner_group_id else User.objects.none()
     )
@@ -681,6 +688,8 @@ def inventory_detail(request, pk):
         'property_types':      PropertyType.objects.order_by('name'),
         'can_edit_properties': can_edit_properties,
         'can_transfer_owner':  can_transfer_owner,
+        'can_delete':          can_delete,
+        'is_in_design':        is_in_design,
         'group_members':       group_members,
         'institutions':        Institution.objects.order_by('name'),
         'locations':            Location.objects.select_related('institution').order_by('name'),
@@ -825,6 +834,40 @@ def inventory_transfer_owner(request, pk):
                         f"{request.user.get_full_name() or request.user.username}."
                     ),
                 )
+
+    return redirect('inventory-detail', pk=instance.pk)
+
+
+@login_required
+def inventory_delete(request, pk):
+    """Delete a ComponentInstance entirely, from the "Delete" button on its
+    detail page (the button asks for confirmation client-side first). Only
+    possible while the instance isn't installed into any design -- removing
+    a physical item that a design still references would silently break
+    that design's Bill of Materials, so it has to be unassigned there first
+    (see design_element_unassign_instance). The button itself is hidden
+    once it's in use (see inventory_detail's is_in_design), and this is the
+    authoritative server-side check, not just a hidden control. Members of
+    the instance's owner_group (or a superuser) may delete; 403
+    otherwise."""
+    instance = get_object_or_404(ComponentInstance, pk=pk)
+    user_group_ids = set(request.user.groups.values_list('id', flat=True))
+    can_delete = (
+        (bool(instance.owner_group_id) and instance.owner_group_id in user_group_ids)
+        or request.user.is_superuser
+    )
+
+    if request.method == 'POST':
+        if not can_delete:
+            return HttpResponseForbidden("You don't have permission to delete this instance.")
+        if instance.design_installations.exists():
+            # In use by a design -- business-rule state check, not an
+            # authorization failure: ignore silently rather than 403, same
+            # treatment as the locked-template/locked-design POSTs
+            # elsewhere in this file.
+            return redirect('inventory-detail', pk=instance.pk)
+        instance.delete()
+        return redirect('inventory-list')
 
     return redirect('inventory-detail', pk=instance.pk)
 

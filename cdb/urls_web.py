@@ -27,6 +27,8 @@ urlpatterns = [
     path("inventory/<str:pk>/properties/<str:property_id>/update/",
                                        views_web.inventory_property_update, name="inventory-property-update"),
     path("inventory/<str:pk>/qr/",    views_web.inventory_qr,     name="inventory-qr"),
+    path("inventory/<str:pk>/delete/",
+                                       views_web.inventory_delete, name="inventory-delete"),
     path("inventory/<str:pk>/transfer-owner/",
                                        views_web.inventory_transfer_owner, name="inventory-transfer-owner"),
     path("inventory/<str:pk>/update-location/",
