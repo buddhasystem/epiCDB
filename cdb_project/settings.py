@@ -15,6 +15,16 @@ CSRF_TRUSTED_ORIGINS = [
     "https://*.trycloudflare.com",
 ]
 
+# fields.W342: DesignElementInstance.instance is a ForeignKey(unique=True)
+# rather than a OneToOneField. Deliberate -- the DB constraint is identical
+# either way, but a real OneToOneField's reverse accessor returns a single
+# object (raising DoesNotExist if unset) instead of the manager-style
+# accessor (.all(), .exists(), prefetch_related) that cdb/views_web.py and
+# inventory_detail.html rely on via ComponentInstance.design_installations.
+# Switching would mean reworking those call sites for no functional gain,
+# so this specific warning is silenced rather than "fixed".
+SILENCED_SYSTEM_CHECKS = ["fields.W342"]
+
 # Application definition
 
 INSTALLED_APPS = [
